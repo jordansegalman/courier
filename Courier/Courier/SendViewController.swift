@@ -83,11 +83,8 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             let decodedData: Data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters)!
             let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp.pdf")
             try decodedData.write(to: fileURL, options: .atomicWrite)
-            let documentInteractionController = UIDocumentInteractionController()
-            documentInteractionController.url = fileURL
-            documentInteractionController.uti = fileURL.pathExtension
-            documentInteractionController.name = fileURL.deletingPathExtension().lastPathComponent
-            documentInteractionController.presentOptionsMenu(from: self.view.frame, in: view, animated: true)
+            let activityViewController = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+            present(activityViewController, animated: true, completion: nil)
         } catch {
             fatalError()
         }
