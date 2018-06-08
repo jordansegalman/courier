@@ -47,11 +47,10 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             do {
                 let base64 = try Data(contentsOf: videoURL, options: .mappedIfSafe).base64EncodedString()
                 let decodedData: Data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters)!
-                var fileURL = (FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)).last
-                fileURL = fileURL?.appendingPathComponent("temp.mov")
-                try decodedData.write(to: fileURL!, options: .atomicWrite)
+                let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp.mov")
+                try decodedData.write(to: fileURL, options: .atomicWrite)
                 PHPhotoLibrary.shared().performChanges({
-                    PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: fileURL!)
+                    PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: fileURL)
                 }) { saved, error in
                     if saved {
                         let alertController = UIAlertController(title: "Video Successfully Saved", message: nil, preferredStyle: .alert)
@@ -63,7 +62,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
                         self.present(alertController, animated: true, completion: nil)
                     }
                     do {
-                        try FileManager.default.removeItem(at: fileURL!)
+                        try FileManager.default.removeItem(at: fileURL)
                     } catch {
                         fatalError()
                     }
@@ -79,7 +78,19 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        print(urls)
+        do {
+            let base64 = try Data(contentsOf: urls[0], options: .mappedIfSafe).base64EncodedString()
+            let decodedData: Data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters)!
+            let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp.pdf")
+            try decodedData.write(to: fileURL, options: .atomicWrite)
+            let documentInteractionController = UIDocumentInteractionController()
+            documentInteractionController.url = fileURL
+            documentInteractionController.uti = fileURL.pathExtension
+            documentInteractionController.name = fileURL.deletingPathExtension().lastPathComponent
+            documentInteractionController.presentOptionsMenu(from: self.view.frame, in: view, animated: true)
+        } catch {
+            fatalError()
+        }
     }
     
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
@@ -108,13 +119,49 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         if fileType == FileType.camera {
             switch AVCaptureDevice.authorizationStatus(for: .video) {
             case .authorized:
-                openCamera()
+                switch AVCaptureDevice.authorizationStatus(for: .audio) {
+                case .authorized:
+                    openCamera()
+                case .denied:
+                    let alertController = UIAlertController(title: "Courier does not have permission to access the microphone.", message: nil, preferredStyle: .alert)
+                    alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { (alertController) in
+                        self.openCamera()
+                    }))
+                    self.present(alertController, animated: true, completion: nil)
+                case .notDetermined:
+                    AVCaptureDevice.requestAccess(for: .audio, completionHandler: {_ in self.openCamera()
+                    })
+                case .restricted:
+                    let alertController = UIAlertController(title: "Courier does not have permission to access the microphone.", message: nil, preferredStyle: .alert)
+                    alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { (alertController) in
+                        self.openCamera()
+                    }))
+                    self.present(alertController, animated: true, completion: nil)
+                }
             case .denied:
                 showPermissionsAlert(fileType: fileType)
             case .notDetermined:
                 AVCaptureDevice.requestAccess(for: .video, completionHandler: {accessGranted in
                     if accessGranted {
-                        self.openCamera()
+                        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+                        case .authorized:
+                            self.openCamera()
+                        case .denied:
+                            let alertController = UIAlertController(title: "Courier does not have permission to access the microphone.", message: nil, preferredStyle: .alert)
+                            alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { (alertController) in
+                                self.openCamera()
+                            }))
+                            self.present(alertController, animated: true, completion: nil)
+                        case .notDetermined:
+                            AVCaptureDevice.requestAccess(for: .audio, completionHandler: {_ in self.openCamera()
+                            })
+                        case .restricted:
+                            let alertController = UIAlertController(title: "Courier does not have permission to access the microphone.", message: nil, preferredStyle: .alert)
+                            alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { (alertController) in
+                                self.openCamera()
+                            }))
+                            self.present(alertController, animated: true, completion: nil)
+                        }
                     }
                 })
             case .restricted:
@@ -156,6 +203,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     func openCamera() {
         let imagePickerController = UIImagePickerController()
         imagePickerController.sourceType = .camera
+        imagePickerController.mediaTypes = [kUTTypeImage as String, kUTTypeMovie as String]
         imagePickerController.delegate = self
         present(imagePickerController, animated: true, completion: nil)
     }
