@@ -10,6 +10,8 @@ import UIKit
 import MobileCoreServices
 import AVFoundation
 import Photos
+import CryptoSwift
+import Security
 
 class SendViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIDocumentPickerDelegate {
     
@@ -79,12 +81,35 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         do {
+            let name = urls[0].lastPathComponent
             let base64 = try Data(contentsOf: urls[0], options: .mappedIfSafe).base64EncodedString()
-            let decodedData: Data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters)!
-            let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp.pdf")
-            try decodedData.write(to: fileURL, options: .atomicWrite)
-            let activityViewController = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
-            present(activityViewController, animated: true, completion: nil)
+            var ivBytes = Data(count: 12)
+            let result = ivBytes.withUnsafeMutableBytes {
+                SecRandomCopyBytes(kSecRandomDefault, 12, $0)
+            }
+            if result == errSecSuccess {
+                let password = Array("password".utf8)
+                var saltBytes = Data(count: 64)
+                let result = saltBytes.withUnsafeMutableBytes {
+                    SecRandomCopyBytes(kSecRandomDefault, 64, $0)
+                }
+                if result == errSecSuccess {
+                    let salt = Array(saltBytes.toHexString().utf8)
+                    let hash = try PKCS5.PBKDF2(password: password, salt: salt, iterations: 4096, keyLength: 32, variant: .sha512).calculate()
+                    let iv = Array(ivBytes.toHexString().utf8)
+                    let gcm1 = GCM(iv: iv, mode: .combined)
+                    let aes1 = try AES(key: hash, blockMode: gcm1, padding: .noPadding)
+                    let encrypted = try aes1.encrypt(Array(base64.utf8))
+                    let gcm2 = GCM(iv: iv, mode: .combined)
+                    let aes2 = try AES(key: hash, blockMode: gcm2, padding: .noPadding)
+                    let decrypted = try aes2.decrypt(encrypted)
+                    let decodedData: Data = Data(base64Encoded: String(data: Data(bytes: decrypted), encoding: .utf8)!, options: .ignoreUnknownCharacters)!
+                    let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+                    try decodedData.write(to: fileURL, options: .atomicWrite)
+                    let activityViewController = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+                    present(activityViewController, animated: true, completion: nil)
+                }
+            }
         } catch {
             fatalError()
         }
@@ -221,7 +246,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func pickFile() {
-        let documentPickerController = UIDocumentPickerViewController(documentTypes: [kUTTypePDF as String], in: .import)
+        let documentPickerController = UIDocumentPickerViewController(documentTypes: [kUTTypeItem as String], in: .import)
         documentPickerController.modalPresentationStyle = .formSheet
         documentPickerController.delegate = self
         present(documentPickerController, animated: true, completion: nil)
