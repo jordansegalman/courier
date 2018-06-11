@@ -1,6 +1,0 @@
-framework module Pods_Courier {
-  umbrella header "Pods-Courier-umbrella.h"
-
-  export *
-  module * { export * }
-}

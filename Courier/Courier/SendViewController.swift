@@ -10,7 +10,6 @@ import UIKit
 import MobileCoreServices
 import AVFoundation
 import Photos
-import CryptoSwift
 import Security
 
 class SendViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIDocumentPickerDelegate {
@@ -148,14 +147,14 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
                 } else if let editedImage = info[UIImagePickerControllerEditedImage] as? UIImage {
                     base64 = UIImagePNGRepresentation(editedImage)!.base64EncodedString()
                 }
-                let password = "password"
+                let password = "passwordpasswordpasswordpassword"
                 encryptBase64AndName(base64: base64, name: name, password: password)
             } else {
                 if let imageURL = info[UIImagePickerControllerImageURL] as? URL {
                     do {
                         let name = imageURL.lastPathComponent
                         let base64 = try Data(contentsOf: imageURL, options: .mappedIfSafe).base64EncodedString()
-                        let password = "password"
+                        let password = "passwordpasswordpasswordpassword"
                         encryptBase64AndName(base64: base64, name: name, password: password)
                     } catch {
                         fatalError()
@@ -168,7 +167,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
                 do {
                     let name = mediaURL.lastPathComponent
                     let base64 = try Data(contentsOf: mediaURL, options: .mappedIfSafe).base64EncodedString()
-                    let password = "password"
+                    let password = "passwordpasswordpasswordpassword"
                     encryptBase64AndName(base64: base64, name: name, password: password)
                 } catch {
                     fatalError()
@@ -187,7 +186,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             do {
                 let name = urls[0].lastPathComponent
                 let base64 = try Data(contentsOf: urls[0], options: .mappedIfSafe).base64EncodedString()
-                let password = "password"
+                let password = "passwordpasswordpasswordpassword"
                 encryptBase64AndName(base64: base64, name: name, password: password)
             } catch {
                 fatalError()
@@ -200,54 +199,114 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func encryptBase64AndName(base64: String, name: String, password: String) {
-        do {
-            let toEncrypt = base64 + "$$$$$$$$" + name
-            let password = Array(password.utf8)
-            var ivBytes = Data(count: 12)
-            let result = ivBytes.withUnsafeMutableBytes {
-                SecRandomCopyBytes(kSecRandomDefault, 12, $0)
-            }
-            if result == errSecSuccess {
-                var saltBytes = Data(count: 64)
-                let result = saltBytes.withUnsafeMutableBytes {
-                    SecRandomCopyBytes(kSecRandomDefault, 64, $0)
-                }
-                if result == errSecSuccess {
-                    let salt = Array(saltBytes.toHexString().utf8)
-                    let hash = try PKCS5.PBKDF2(password: password, salt: salt, iterations: 4096, keyLength: 32, variant: .sha512).calculate()
-                    let iv = Array(ivBytes.toHexString().utf8)
-                    let gcm = GCM(iv: iv, mode: .combined)
-                    let aes = try AES(key: hash, blockMode: gcm, padding: .noPadding)
-                    let encrypted = try aes.encrypt(Array(toEncrypt.utf8))
-                    let saltString = String(bytes: salt, encoding: .utf8)
-                    let ivString = String(bytes: iv, encoding: .utf8)
-                    let encryptedString = Data(bytes: encrypted).base64EncodedString()
-                    decryptBase64AndName(salt: saltString!, iv: ivString!, encrypted: encryptedString, password: "password")
-                }
-            }
-        } catch {
+        let toEncrypt = base64 + "$$$$$$$$" + name
+        let toEncryptData = toEncrypt.data(using: .utf8)!
+        let passwordData = password.data(using: .utf8)!
+        var saltData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
+        let saltStatus = saltData.withUnsafeMutableBytes { saltBytes in
+            SecRandomCopyBytes(kSecRandomDefault, Int(CC_SHA512_DIGEST_LENGTH), saltBytes)
+        }
+        if saltStatus != errSecSuccess {
             fatalError()
         }
+        var keyData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
+        let derivationStatus = keyData.withUnsafeMutableBytes { keyBytes in
+            saltData.withUnsafeBytes { saltBytes in
+                CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), password, passwordData.count, saltBytes, Int(CC_SHA512_DIGEST_LENGTH), CCPBKDFAlgorithm(kCCPRFHmacAlgSHA512), 100000, keyBytes, Int(CC_SHA512_DIGEST_LENGTH))
+            }
+        }
+        if derivationStatus != kCCSuccess {
+            fatalError()
+        }
+        let encryptionKey = keyData.subdata(in: 0..<(Int(CC_SHA512_DIGEST_LENGTH) / 2))
+        let authenticationKey = keyData.subdata(in: (Int(CC_SHA512_DIGEST_LENGTH) / 2)..<Int(CC_SHA512_DIGEST_LENGTH))
+        let keySize = encryptionKey.count
+        if keySize != kCCKeySizeAES256 {
+            fatalError()
+        }
+        let ivSize = kCCBlockSizeAES128
+        let encryptedSize = size_t(toEncryptData.count + kCCBlockSizeAES128 + ivSize)
+        var encryptedData = Data(count: encryptedSize)
+        let ivStatus = encryptedData.withUnsafeMutableBytes { ivBytes in
+            SecRandomCopyBytes(kSecRandomDefault, ivSize, ivBytes)
+        }
+        if ivStatus != errSecSuccess {
+            fatalError()
+        }
+        var numBytesEncrypted: size_t = 0
+        let encryptionStatus = encryptedData.withUnsafeMutableBytes { encryptedBytes in
+            toEncryptData.withUnsafeBytes { toEncryptDataBytes in
+                encryptionKey.withUnsafeBytes { encryptionKeyBytes in
+                    CCCrypt(CCOperation(kCCEncrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, keySize, encryptedBytes, toEncryptDataBytes, toEncryptData.count, encryptedBytes + ivSize, encryptedSize, &numBytesEncrypted)
+                }
+            }
+        }
+        if encryptionStatus != kCCSuccess {
+            fatalError()
+        }
+        encryptedData.count = numBytesEncrypted + ivSize
+        var authenticatedData = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+        authenticatedData.withUnsafeMutableBytes { authenticatedBytes in
+            encryptedData.withUnsafeBytes { encryptedBytes in
+                authenticationKey.withUnsafeBytes { authenticationKeyBytes in
+                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), authenticationKeyBytes, authenticationKey.count, encryptedBytes, encryptedData.count, authenticatedBytes)
+                }
+            }
+        }
+        decryptBase64AndName(encrypted: encryptedData.base64EncodedString(), authenticated: authenticatedData.base64EncodedString(), salt: saltData.base64EncodedString(), password: password)
     }
     
-    func decryptBase64AndName(salt: String, iv: String, encrypted: String, password: String) {
-        do {
-            let salt = Array(salt.utf8)
-            let iv = Array(iv.utf8)
-            let encrypted = Data(base64Encoded: encrypted)!.bytes
-            let password = Array(password.utf8)
-            let hash = try PKCS5.PBKDF2(password: password, salt: salt, iterations: 4096, keyLength: 32, variant: .sha512).calculate()
-            let gcm = GCM(iv: iv, mode: .combined)
-            let aes = try AES(key: hash, blockMode: gcm, padding: .noPadding)
-            let decrypted = try aes.decrypt(encrypted)
-            let decryptedString = String(data: Data(bytes: decrypted), encoding: .utf8)
-            let decryptedStringArray = decryptedString!.components(separatedBy: "$$$$$$$$")
-            let base64 = decryptedStringArray[0]
-            let name = decryptedStringArray[1]
-            createActivityViewController(base64: base64, name: name)
-        } catch {
+    func decryptBase64AndName(encrypted: String, authenticated: String, salt: String, password: String) {
+        let encryptedData = Data(base64Encoded: encrypted)!
+        let authenticatedData = Data(base64Encoded: authenticated)!
+        let saltData = Data(base64Encoded: salt)!
+        let passwordData = password.data(using: .utf8)!
+        var keyData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
+        let derivationStatus = keyData.withUnsafeMutableBytes { keyBytes in
+            saltData.withUnsafeBytes { saltBytes in
+                CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), password, passwordData.count, saltBytes, Int(CC_SHA512_DIGEST_LENGTH), CCPBKDFAlgorithm(kCCPRFHmacAlgSHA512), 100000, keyBytes, Int(CC_SHA512_DIGEST_LENGTH))
+            }
+        }
+        if derivationStatus != kCCSuccess {
             fatalError()
         }
+        let encryptionKey = keyData.subdata(in: 0..<(Int(CC_SHA512_DIGEST_LENGTH) / 2))
+        let authenticationKey = keyData.subdata(in: (Int(CC_SHA512_DIGEST_LENGTH) / 2)..<Int(CC_SHA512_DIGEST_LENGTH))
+        var unauthenticatedData = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+        unauthenticatedData.withUnsafeMutableBytes { unauthenticatedBytes in
+            encryptedData.withUnsafeBytes { encryptedBytes in
+                authenticationKey.withUnsafeBytes { authenticationKeyBytes in
+                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), authenticationKeyBytes, authenticationKey.count, encryptedBytes, encryptedData.count, unauthenticatedBytes)
+                }
+            }
+        }
+        if unauthenticatedData != authenticatedData {
+            fatalError()
+        }
+        let keySize = encryptionKey.count
+        if keySize != kCCKeySizeAES256 {
+            fatalError()
+        }
+        let ivSize = kCCBlockSizeAES128
+        let decryptedSize = size_t(encryptedData.count - ivSize)
+        var decryptedData = Data(count: decryptedSize)
+        var numBytesDecrypted: size_t = 0
+        let decryptionStatus = decryptedData.withUnsafeMutableBytes { decryptedBytes in
+            encryptedData.withUnsafeBytes { encryptedDataBytes in
+                encryptionKey.withUnsafeBytes { encryptionKeyBytes in
+                    CCCrypt(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, keySize, encryptedDataBytes, encryptedDataBytes + ivSize, decryptedSize, decryptedBytes, decryptedSize, &numBytesDecrypted)
+                }
+            }
+        }
+        if decryptionStatus != kCCSuccess {
+            fatalError()
+        }
+        decryptedData.count = numBytesDecrypted
+        let decryptedString = String(data: decryptedData, encoding: .utf8)
+        let decryptedStringArray = decryptedString!.components(separatedBy: "$$$$$$$$")
+        let base64 = decryptedStringArray[0]
+        let name = decryptedStringArray[1]
+        createActivityViewController(base64: base64, name: name)
     }
     
     func createActivityViewController(base64: String, name: String) {
