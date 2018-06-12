@@ -1,0 +1,16 @@
+{
+  "name": "courier-server",
+  "version": "1.0.0",
+  "description": "Courier Server",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jordan Segalman",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^6.0.0",
+    "express": "^4.16.3",
+    "socket.io": "^2.1.1"
+  }
+}
