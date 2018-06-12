@@ -8,18 +8,95 @@
 
 import UIKit
 import MobileCoreServices
-import AVFoundation
 import Photos
-import Security
+import SocketIO
 
 class SendViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIDocumentPickerDelegate {
+    @IBOutlet weak var sendButton: UIButton!
+    @IBOutlet weak var keyLabel: UILabel!
+    @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
+    
+    let socketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
+    var socket: SocketIOClient!
+    var encryptedToSend: String!
+    var authenticatedToSend: String!
+    var saltToSend: String!
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
+        socket = socketManager.defaultSocket
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        initializeSocketIO()
+    }
+    
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        terminateSocketIO()
+    }
+    
+    func initializeSocketIO() {
+        socket.on(clientEvent: .connect) { data, ack in
+            print("Socket.IO connected")
+        }
+        socket.on(clientEvent: .disconnect) { data, ack in
+            print("Socket.IO disconnected")
+        }
+        socket.on("requestSend") { data, ack in
+            self.keyLabel.isHidden = true
+            self.activityIndicator.startAnimating()
+            ack.with(["encrypted": self.encryptedToSend, "authenticated": self.authenticatedToSend, "salt": self.saltToSend])
+        }
+        socket.on("received") { data, ack in
+            self.encryptedToSend = nil
+            self.authenticatedToSend = nil
+            self.saltToSend = nil
+            self.activityIndicator.stopAnimating()
+            self.sendButton.isHidden = false
+        }
+        socket.connect()
+    }
+    
+    func terminateSocketIO() {
+        socket.disconnect()
+        socket.removeAllHandlers()
+    }
+    
+    func requestSendSocketIO(encrypted: String, authenticated: String, salt: String) {
+        encryptedToSend = encrypted
+        authenticatedToSend = authenticated
+        saltToSend = salt
+        socket.emitWithAck("requestSend", []).timingOut(after: 0) { data in
+            let key = data[0] as! String
+            self.keyLabel.text = key
+            self.keyLabel.isHidden = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(5), execute: {
+                self.socket.emitWithAck("requestReceive", ["key": key]).timingOut(after: 0) { data in
+                    if data.count == 1 {
+                        let dictionary = data[0] as! [String: String]
+                        self.socket.emit("received", ["key": key])
+                        self.decryptBase64AndName(encrypted: dictionary["encrypted"]!, authenticated: dictionary["authenticated"]!, salt: dictionary["salt"]!, password: "passwordpasswordpasswordpassword")
+                    } else {
+                        self.showIncorrectKeyAlert()
+                    }
+                }
+            })
+        }
+    }
+    
+    func showIncorrectKeyAlert() {
+        let socketIOConnectionAlertController = UIAlertController(title: "Incorrect Key", message: nil, preferredStyle: .alert)
+        socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        self.present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
     @IBAction func sendButtonClicked(_ sender: UIButton) {
+        if socket.status != .connected {
+            showSocketIOConnectionAlert()
+            return
+        }
         let alertController = UIAlertController(title: "Choose Something to Send", message: nil, preferredStyle: .actionSheet)
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
             alertController.addAction(UIAlertAction(title: "Camera", style: .default, handler: { (UIAlertAction) in
@@ -36,6 +113,12 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         }))
         alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
         present(alertController, animated: true, completion: nil)
+    }
+    
+    func showSocketIOConnectionAlert() {
+        let socketIOConnectionAlertController = UIAlertController(title: "Not Connected", message: nil, preferredStyle: .alert)
+        socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        self.present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
     func checkPermissions(sourceType: UIImagePickerControllerSourceType) {
@@ -110,6 +193,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
 
     func openCamera() {
+        sendButton.isHidden = true
         let imagePickerController = UIImagePickerController()
         imagePickerController.sourceType = .camera
         imagePickerController.mediaTypes = UIImagePickerController.availableMediaTypes(for: .camera)!
@@ -119,6 +203,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func openPhotoLibrary() {
+        sendButton.isHidden = true
         let imagePickerController = UIImagePickerController()
         imagePickerController.sourceType = .photoLibrary
         imagePickerController.mediaTypes = UIImagePickerController.availableMediaTypes(for: .photoLibrary)!
@@ -128,6 +213,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func openDocument() {
+        sendButton.isHidden = true
         let documentPickerController = UIDocumentPickerViewController(documentTypes: [kUTTypeItem as String], in: .import)
         documentPickerController.allowsMultipleSelection = false
         documentPickerController.modalPresentationStyle = .fullScreen
@@ -177,6 +263,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        sendButton.isHidden = false
         dismiss(animated: true, completion: nil)
     }
     
@@ -195,6 +282,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        sendButton.isHidden = false
         dismiss(animated: true, completion: nil)
     }
     
@@ -253,7 +341,12 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
                 }
             }
         }
-        decryptBase64AndName(encrypted: encryptedData.base64EncodedString(), authenticated: authenticatedData.base64EncodedString(), salt: saltData.base64EncodedString(), password: password)
+        if socket.status == .connected {
+            requestSendSocketIO(encrypted: encryptedData.base64EncodedString(), authenticated: authenticatedData.base64EncodedString(), salt: saltData.base64EncodedString())
+        } else {
+            sendButton.isHidden = false
+            showSocketIOConnectionAlert()
+        }
     }
     
     func decryptBase64AndName(encrypted: String, authenticated: String, salt: String, password: String) {
@@ -281,7 +374,8 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             }
         }
         if unauthenticatedData != authenticatedData {
-            fatalError()
+            showIncorrectPasswordAlert()
+            return
         }
         let keySize = encryptionKey.count
         if keySize != kCCKeySizeAES256 {
@@ -302,11 +396,20 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             fatalError()
         }
         decryptedData.count = numBytesDecrypted
-        let decryptedString = String(data: decryptedData, encoding: .utf8)
-        let decryptedStringArray = decryptedString!.components(separatedBy: "$$$$$$$$")
-        let base64 = decryptedStringArray[0]
-        let name = decryptedStringArray[1]
-        createActivityViewController(base64: base64, name: name)
+        if let decryptedString = String(data: decryptedData, encoding: .utf8) {
+            let decryptedStringArray = decryptedString.components(separatedBy: "$$$$$$$$")
+            let base64 = decryptedStringArray[0]
+            let name = decryptedStringArray[1]
+            createActivityViewController(base64: base64, name: name)
+        } else {
+            showIncorrectPasswordAlert()
+        }
+    }
+    
+    func showIncorrectPasswordAlert() {
+        let socketIOConnectionAlertController = UIAlertController(title: "Incorrect Password", message: nil, preferredStyle: .alert)
+        socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        self.present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
     func createActivityViewController(base64: String, name: String) {
