@@ -23,11 +23,11 @@
                                 <fontDescription key="fontDescription" type="system" weight="heavy" pointSize="32"/>
                                 <state key="normal" title="Send"/>
                                 <connections>
-                                    <action selector="sendButtonClicked:" destination="9pv-A4-QxB" eventType="touchUpInside" id="CEc-If-WI3"/>
+                                    <action selector="sendButtonTouched:" destination="9pv-A4-QxB" eventType="touchUpInside" id="CEc-If-WI3"/>
                                 </connections>
                             </button>
-                            <label hidden="YES" opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="000000000" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5ih-OI-DJS">
-                                <rect key="frame" x="87" y="314" width="200" height="39"/>
+                            <label hidden="YES" opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5ih-OI-DJS">
+                                <rect key="frame" x="187" y="333.5" width="0.0" height="0.0"/>
                                 <fontDescription key="fontDescription" type="system" weight="heavy" pointSize="32"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
@@ -65,14 +65,49 @@
                     <view key="view" contentMode="scaleToFill" id="kOz-Gq-HoI">
                         <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                        <subviews>
+                            <textField opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="center" borderStyle="roundedRect" textAlignment="center" minimumFontSize="32" translatesAutoresizingMaskIntoConstraints="NO" id="vZp-3u-8fy">
+                                <rect key="frame" x="65" y="237" width="245" height="43"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="245" id="ZJc-Gr-m8J"/>
+                                </constraints>
+                                <nil key="textColor"/>
+                                <fontDescription key="fontDescription" type="system" weight="heavy" pointSize="32"/>
+                                <textInputTraits key="textInputTraits" keyboardType="numberPad"/>
+                            </textField>
+                            <button opaque="NO" contentMode="scaleToFill" enabled="NO" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="mfd-fj-5Yc">
+                                <rect key="frame" x="126" y="308" width="123" height="51"/>
+                                <fontDescription key="fontDescription" type="system" weight="heavy" pointSize="32"/>
+                                <state key="normal" title="Receive"/>
+                                <connections>
+                                    <action selector="receiveButtonTouched:" destination="8rJ-Kc-sve" eventType="touchUpInside" id="RJ4-IL-AZy"/>
+                                </connections>
+                            </button>
+                            <activityIndicatorView hidden="YES" opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" hidesWhenStopped="YES" style="gray" translatesAutoresizingMaskIntoConstraints="NO" id="NOb-nn-fnr">
+                                <rect key="frame" x="177.5" y="323.5" width="20" height="20"/>
+                            </activityIndicatorView>
+                        </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <constraints>
+                            <constraint firstItem="vZp-3u-8fy" firstAttribute="centerX" secondItem="kOz-Gq-HoI" secondAttribute="centerX" id="gpY-X2-kgj"/>
+                            <constraint firstItem="mfd-fj-5Yc" firstAttribute="centerX" secondItem="kOz-Gq-HoI" secondAttribute="centerX" id="njm-qU-6Cv"/>
+                            <constraint firstItem="vZp-3u-8fy" firstAttribute="centerY" secondItem="kOz-Gq-HoI" secondAttribute="centerY" constant="-75" id="oBq-xV-K20"/>
+                            <constraint firstItem="NOb-nn-fnr" firstAttribute="centerX" secondItem="kOz-Gq-HoI" secondAttribute="centerX" id="oIm-Gu-yhc"/>
+                            <constraint firstItem="mfd-fj-5Yc" firstAttribute="centerY" secondItem="kOz-Gq-HoI" secondAttribute="centerY" id="tlm-Ig-9Hl"/>
+                            <constraint firstItem="NOb-nn-fnr" firstAttribute="centerY" secondItem="kOz-Gq-HoI" secondAttribute="centerY" id="zut-bE-mWd"/>
+                        </constraints>
                         <viewLayoutGuide key="safeArea" id="eqa-U8-j4d"/>
                     </view>
                     <tabBarItem key="tabBarItem" title="Receive" image="second" id="cPa-gy-q4n"/>
+                    <connections>
+                        <outlet property="activityIndicator" destination="NOb-nn-fnr" id="Jvm-K8-s1A"/>
+                        <outlet property="keyTextField" destination="vZp-3u-8fy" id="fV1-El-wDx"/>
+                        <outlet property="receiveButton" destination="mfd-fj-5Yc" id="2Og-TR-EpV"/>
+                    </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="4Nw-L8-lE0" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="750" y="360"/>
+            <point key="canvasLocation" x="749.60000000000002" y="359.37031484257875"/>
         </scene>
         <!--Tab Bar Controller-->
         <scene sceneID="yl2-sM-qoP">
