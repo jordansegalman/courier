@@ -18,18 +18,35 @@ io.on('connection', (socket) => {
 	socket.on('disconnect', () => {
 		console.log('Socket.IO disconnection');
 	});
-	socket.on('requestSend', (data, fn) => {
+	socket.on('requestStartSend', (data, fn) => {
 		var key = Math.random().toString().slice(2, 11);
 		while (keySockets.hasOwnProperty(key)) {
 			key = Math.random().toString().slice(2, 11);
 		}
+		console.log('from requestStartSend');
 		keySockets[key] = socket;
 		fn(key);
 	});
+	socket.on('requestStartReceive', (data, fn) => {
+		var key = data.key;
+		if (keySockets.hasOwnProperty(key)) {
+		console.log('from requestStartReceive');
+			keySockets[key].emit('requestStartSend', {}, (data) => {
+		console.log('reply requestStartSend');
+				fn(data);
+			});
+		} else {
+			fn();
+		}
+	});
+	var i = 0;
 	socket.on('requestReceive', (data, fn) => {
 		var key = data.key;
 		if (keySockets.hasOwnProperty(key)) {
+		console.log('from requestReceive');
 			keySockets[key].emit('requestSend', {}, (data) => {
+		console.log('reply requestSend');
+				console.log(i++);
 				fn(data);
 			});
 		} else {
@@ -39,6 +56,7 @@ io.on('connection', (socket) => {
 	socket.on('received', (data) => {
 		var key = data.key;
 		if (keySockets.hasOwnProperty(key)) {
+		console.log('from received');
 			keySockets[key].emit('received', {});
 			delete keySockets[key];
 		}
