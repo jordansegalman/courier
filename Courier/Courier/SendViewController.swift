@@ -49,14 +49,13 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             self.activityIndicator.startAnimating()
             self.progressBar.isHidden = false
             UIApplication.shared.isIdleTimerDisabled = true
-            self.initializeSend(ack: ack)
+            self.showPasswordCreationAlert(ack: ack)
         }
         sendSocket.on("requestSend") { data, ack in
             self.send(ack: ack)
         }
         sendSocket.on("received") { data, ack in
             self.terminateSend()
-            self.cleanTemporaryDirectory()
             UIApplication.shared.isIdleTimerDisabled = false
             self.progressBar.isHidden = true
             self.progressBar.setProgress(0, animated: false)
@@ -94,6 +93,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             showTransferAlert()
             return
         }
+        cleanTemporaryDirectory()
         let alertController = UIAlertController(title: "Choose Something to Send", message: nil, preferredStyle: .actionSheet)
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
             alertController.addAction(UIAlertAction(title: "Camera", style: .default, handler: { (UIAlertAction) in
@@ -112,10 +112,22 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         present(alertController, animated: true, completion: nil)
     }
     
+    func cleanTemporaryDirectory() {
+        do {
+            let temporaryDirectoryContents = try FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)
+            try temporaryDirectoryContents.forEach { file in
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent(file)
+                try FileManager.default.removeItem(at: url)
+            }
+        } catch {
+            fatalError()
+        }
+    }
+    
     func showTransferAlert() {
-        let socketIOConnectionAlertController = UIAlertController(title: "Another transfer is currently in progress.", message: nil, preferredStyle: .alert)
-        socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-        present(socketIOConnectionAlertController, animated: true, completion: nil)
+        let transferAlertController = UIAlertController(title: "Another transfer is currently in progress.", message: nil, preferredStyle: .alert)
+        transferAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(transferAlertController, animated: true, completion: nil)
     }
     
     func showSocketIOConnectionAlert() {
@@ -282,7 +294,58 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         dismiss(animated: true, completion: nil)
     }
     
-    func initializeSend(ack: SocketAckEmitter) {
+    func showPasswordCreationAlert(ack: SocketAckEmitter) {
+        let passwordCreationAlertController = UIAlertController(title: "Create Password for File", message: nil, preferredStyle: .alert)
+        passwordCreationAlertController.addTextField { (textField) in
+            textField.placeholder = "Password"
+            textField.isSecureTextEntry = true
+        }
+        passwordCreationAlertController.addTextField { (textField) in
+            textField.placeholder = "Confirm Password"
+            textField.isSecureTextEntry = true
+        }
+        passwordCreationAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { (UIAlertAction) in
+            let password = passwordCreationAlertController.textFields![0].text
+            let confirmPassword = passwordCreationAlertController.textFields![1].text
+            if password == confirmPassword {
+                if !password!.isEmpty {
+                    self.initializeSend(password: password!, ack: ack)
+                } else {
+                    self.showPasswordCannotBeEmptyAlert(ack: ack)
+                }
+            } else {
+                self.showPasswordsDidNotMatchAlert(ack: ack)
+            }
+        }))
+        passwordCreationAlertController.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { (UIAlertAction) in
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.progressBar.isHidden = true
+            self.progressBar.setProgress(0, animated: false)
+            self.activityIndicator.stopAnimating()
+            self.terminateSocketIO()
+            self.resetSend()
+            self.sendButton.isHidden = false
+        }))
+        present(passwordCreationAlertController, animated: true, completion: nil)
+    }
+    
+    func showPasswordsDidNotMatchAlert(ack: SocketAckEmitter) {
+        let passwordsDidNotMatchAlertController = UIAlertController(title: "Passwords Did Not Match", message: nil, preferredStyle: .alert)
+        passwordsDidNotMatchAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { (UIAlertAction) in
+            self.showPasswordCreationAlert(ack: ack)
+        }))
+        present(passwordsDidNotMatchAlertController, animated: true, completion: nil)
+    }
+    
+    func showPasswordCannotBeEmptyAlert(ack: SocketAckEmitter) {
+        let passwordCannotBeEmptyAlertController = UIAlertController(title: "Password Cannot Be Empty", message: nil, preferredStyle: .alert)
+        passwordCannotBeEmptyAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { (UIAlertAction) in
+            self.showPasswordCreationAlert(ack: ack)
+        }))
+        present(passwordCannotBeEmptyAlertController, animated: true, completion: nil)
+    }
+    
+    func initializeSend(password: String, ack: SocketAckEmitter) {
         // GET FILESIZE
         let url = SendViewController.transfer.url
         do {
@@ -292,7 +355,6 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             fatalError()
         }
         // GENERATE SALT, ENCRYPTION KEY, HMAC KEY, AND IV
-        let password: String = "passwordpasswordpasswordpassword"
         let passwordData = password.data(using: .utf8)!
         var saltData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
         let saltStatus = saltData.withUnsafeMutableBytes { saltBytes in
@@ -431,18 +493,6 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         // RELEASE CRYPTORS AND CLOSE STREAMS
         CCCryptorRelease(SendViewController.transfer.cryptorRef!)
         SendViewController.transfer.inputStream!.close()
-    }
-    
-    func cleanTemporaryDirectory() {
-        do {
-            let temporaryDirectoryContents = try FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)
-            try temporaryDirectoryContents.forEach { file in
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent(file)
-                try FileManager.default.removeItem(at: url)
-            }
-        } catch {
-            fatalError()
-        }
     }
     
     func resetSend() {

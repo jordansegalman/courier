@@ -70,8 +70,7 @@ class ReceiveViewController: UIViewController {
                 if data.count == 1 {
                     ReceiveViewController.receiving = true
                     let dictionary = data.first as! [String: String]
-                    self.initializeReceive(saltData: Data(base64Encoded: dictionary["salt"]!)!, ivData: Data(base64Encoded: dictionary["iv"]!)!, encryptedName: Data(base64Encoded: dictionary["encryptedName"]!)!)
-                    self.receive()
+                    self.showPasswordEntryAlert(saltData: Data(base64Encoded: dictionary["salt"]!)!, ivData: Data(base64Encoded: dictionary["iv"]!)!, encryptedName: Data(base64Encoded: dictionary["encryptedName"]!)!)
                 } else {
                     self.terminateSocketIO()
                     self.resetReceive()
@@ -117,9 +116,9 @@ class ReceiveViewController: UIViewController {
     }
     
     func showTransferAlert() {
-        let socketIOConnectionAlertController = UIAlertController(title: "Another transfer is currently in progress.", message: nil, preferredStyle: .alert)
-        socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-        present(socketIOConnectionAlertController, animated: true, completion: nil)
+        let transferAlertController = UIAlertController(title: "Another transfer is currently in progress.", message: nil, preferredStyle: .alert)
+        transferAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(transferAlertController, animated: true, completion: nil)
     }
     
     func showSocketIOConnectionAlert() {
@@ -129,13 +128,47 @@ class ReceiveViewController: UIViewController {
     }
     
     func showIncorrectKeyAlert() {
-        let socketIOConnectionAlertController = UIAlertController(title: "Incorrect Key", message: nil, preferredStyle: .alert)
-        socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-        present(socketIOConnectionAlertController, animated: true, completion: nil)
+        let incorrectKeyAlertController = UIAlertController(title: "Incorrect Key", message: nil, preferredStyle: .alert)
+        incorrectKeyAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(incorrectKeyAlertController, animated: true, completion: nil)
     }
     
-    func initializeReceive(saltData: Data, ivData: Data, encryptedName: Data) {
-        let password: String = "passwordpasswordpasswordpassword"
+    func showPasswordEntryAlert(saltData: Data, ivData: Data, encryptedName: Data) {
+        let passwordEntryAlertController = UIAlertController(title: "Enter Password for File", message: nil, preferredStyle: .alert)
+        passwordEntryAlertController.addTextField { (textField) in
+            textField.placeholder = "Password"
+            textField.isSecureTextEntry = true
+        }
+        passwordEntryAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { (UIAlertAction) in
+            let password = passwordEntryAlertController.textFields![0].text
+            if !password!.isEmpty {
+                self.initializeReceive(password: password!, saltData: saltData, ivData: ivData, encryptedName: encryptedName)
+            } else {
+                self.showInvalidPasswordAlert(saltData: saltData, ivData: ivData, encryptedName: encryptedName)
+            }
+        }))
+        passwordEntryAlertController.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { (UIAlertAction) in
+            self.terminateSocketIO()
+            self.resetReceive()
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.progressBar.isHidden = true
+            self.progressBar.setProgress(0, animated: false)
+            self.activityIndicator.stopAnimating()
+            self.receiveButton.isHidden = false
+            self.keyTextField.isHidden = false
+        }))
+        present(passwordEntryAlertController, animated: true, completion: nil)
+    }
+    
+    func showInvalidPasswordAlert(saltData: Data, ivData: Data, encryptedName: Data) {
+        let invalidPasswordAlertController = UIAlertController(title: "Invalid Password", message: nil, preferredStyle: .alert)
+        invalidPasswordAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { (UIAlertAction) in
+            self.showPasswordEntryAlert(saltData: saltData, ivData: ivData, encryptedName: encryptedName)
+        }))
+        present(invalidPasswordAlertController, animated: true, completion: nil)
+    }
+    
+    func initializeReceive(password: String, saltData: Data, ivData: Data, encryptedName: Data) {
         let passwordData = password.data(using: .utf8)!
         var keyData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
         let derivationStatus = keyData.withUnsafeMutableBytes { keyBytes in
@@ -182,15 +215,8 @@ class ReceiveViewController: UIViewController {
         }
         decryptedNameData.count = numBytesDecrypted
         guard let decryptedName = String(data: decryptedNameData, encoding: .utf8) else {
-            terminateSocketIO()
-            resetReceive()
-            UIApplication.shared.isIdleTimerDisabled = false
-            self.progressBar.isHidden = true
-            self.progressBar.setProgress(0, animated: false)
-            self.activityIndicator.stopAnimating()
-            self.receiveButton.isHidden = false
-            self.keyTextField.isHidden = false
-            showIncorrectPasswordAlert()
+            ReceiveViewController.transfer.hmacContext = nil
+            showInvalidPasswordAlert(saltData: saltData, ivData: ivData, encryptedName: encryptedName)
             return
         }
         // SETUP CRYPTORS
@@ -209,6 +235,7 @@ class ReceiveViewController: UIViewController {
         ReceiveViewController.transfer.url = FileManager.default.temporaryDirectory.appendingPathComponent(decryptedName)
         ReceiveViewController.transfer.outputStream = OutputStream(url: ReceiveViewController.transfer.url!, append: true)
         ReceiveViewController.transfer.outputStream!.open()
+        receive()
     }
     
     func receive() {
@@ -303,7 +330,7 @@ class ReceiveViewController: UIViewController {
             self.activityIndicator.stopAnimating()
             self.receiveButton.isHidden = false
             self.keyTextField.isHidden = false
-            showIncorrectPasswordAlert()
+            showCouldNotAuthenticateDataAlert()
             return
         }
         self.receiveSocket.emit("received", ["key": ReceiveViewController.transfer.key])
@@ -337,10 +364,10 @@ class ReceiveViewController: UIViewController {
         return firstHmac == secondHmac
     }
     
-    func showIncorrectPasswordAlert() {
-        let socketIOConnectionAlertController = UIAlertController(title: "Incorrect Password", message: nil, preferredStyle: .alert)
-        socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-        present(socketIOConnectionAlertController, animated: true, completion: nil)
+    func showCouldNotAuthenticateDataAlert() {
+        let couldNotAuthenticateDataAlertController = UIAlertController(title: "Could Not Authenticate Data", message: nil, preferredStyle: .alert)
+        couldNotAuthenticateDataAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(couldNotAuthenticateDataAlertController, animated: true, completion: nil)
     }
     
     func presentActivityViewController() {
