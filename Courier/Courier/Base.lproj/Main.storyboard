@@ -6,6 +6,7 @@
     <dependencies>
         <deployment identifier="iOS"/>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14088"/>
+        <capability name="Constraints to layout margins" minToolsVersion="6.0"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -35,14 +36,21 @@
                             <activityIndicatorView hidden="YES" opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" hidesWhenStopped="YES" style="gray" translatesAutoresizingMaskIntoConstraints="NO" id="JmZ-BT-V68">
                                 <rect key="frame" x="177.5" y="323.5" width="20" height="20"/>
                             </activityIndicatorView>
+                            <progressView hidden="YES" opaque="NO" contentMode="scaleToFill" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="jdM-jA-hCH">
+                                <rect key="frame" x="86" y="407.5" width="203" height="2"/>
+                            </progressView>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
                             <constraint firstItem="JmZ-BT-V68" firstAttribute="centerY" secondItem="DuO-so-JI3" secondAttribute="centerY" id="1s2-fi-hqc"/>
                             <constraint firstItem="JmZ-BT-V68" firstAttribute="centerX" secondItem="DuO-so-JI3" secondAttribute="centerX" id="1wg-yc-iIH"/>
+                            <constraint firstItem="jdM-jA-hCH" firstAttribute="centerY" secondItem="DuO-so-JI3" secondAttribute="centerY" constant="75" id="GF4-3i-yXq"/>
+                            <constraint firstItem="jdM-jA-hCH" firstAttribute="centerX" secondItem="DuO-so-JI3" secondAttribute="centerX" id="PB7-DI-k4P"/>
                             <constraint firstItem="5ih-OI-DJS" firstAttribute="centerY" secondItem="DuO-so-JI3" secondAttribute="centerY" id="Uh5-WR-ggI"/>
+                            <constraint firstAttribute="trailingMargin" secondItem="jdM-jA-hCH" secondAttribute="trailing" constant="70" id="aul-32-mlp"/>
                             <constraint firstItem="jKk-VE-bQE" firstAttribute="centerY" secondItem="DuO-so-JI3" secondAttribute="centerY" id="jcA-Pk-5oY"/>
                             <constraint firstItem="5ih-OI-DJS" firstAttribute="centerX" secondItem="DuO-so-JI3" secondAttribute="centerX" id="kdR-qF-doR"/>
+                            <constraint firstItem="jdM-jA-hCH" firstAttribute="leading" secondItem="DuO-so-JI3" secondAttribute="leadingMargin" constant="70" id="v1Z-k3-kbb"/>
                             <constraint firstItem="jKk-VE-bQE" firstAttribute="centerX" secondItem="DuO-so-JI3" secondAttribute="centerX" id="w1u-fY-aEN"/>
                         </constraints>
                         <viewLayoutGuide key="safeArea" id="zLa-Nc-L4F"/>
@@ -51,6 +59,7 @@
                     <connections>
                         <outlet property="activityIndicator" destination="JmZ-BT-V68" id="inh-QA-d7X"/>
                         <outlet property="keyLabel" destination="5ih-OI-DJS" id="8Mg-GT-pZN"/>
+                        <outlet property="progressBar" destination="jdM-jA-hCH" id="pxt-O3-XIW"/>
                         <outlet property="sendButton" destination="jKk-VE-bQE" id="RYd-Vw-iO0"/>
                     </connections>
                 </viewController>
@@ -86,13 +95,20 @@
                             <activityIndicatorView hidden="YES" opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" hidesWhenStopped="YES" style="gray" translatesAutoresizingMaskIntoConstraints="NO" id="NOb-nn-fnr">
                                 <rect key="frame" x="177.5" y="323.5" width="20" height="20"/>
                             </activityIndicatorView>
+                            <progressView hidden="YES" opaque="NO" contentMode="scaleToFill" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="ng0-i6-4sh">
+                                <rect key="frame" x="86" y="407.5" width="203" height="2"/>
+                            </progressView>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
+                            <constraint firstAttribute="trailingMargin" secondItem="ng0-i6-4sh" secondAttribute="trailing" constant="70" id="7m7-pA-O7t"/>
+                            <constraint firstItem="ng0-i6-4sh" firstAttribute="centerY" secondItem="kOz-Gq-HoI" secondAttribute="centerY" constant="75" id="L6a-Um-VIK"/>
+                            <constraint firstItem="ng0-i6-4sh" firstAttribute="leading" secondItem="kOz-Gq-HoI" secondAttribute="leadingMargin" constant="70" id="dal-23-S1x"/>
                             <constraint firstItem="vZp-3u-8fy" firstAttribute="centerX" secondItem="kOz-Gq-HoI" secondAttribute="centerX" id="gpY-X2-kgj"/>
                             <constraint firstItem="mfd-fj-5Yc" firstAttribute="centerX" secondItem="kOz-Gq-HoI" secondAttribute="centerX" id="njm-qU-6Cv"/>
                             <constraint firstItem="vZp-3u-8fy" firstAttribute="centerY" secondItem="kOz-Gq-HoI" secondAttribute="centerY" constant="-75" id="oBq-xV-K20"/>
                             <constraint firstItem="NOb-nn-fnr" firstAttribute="centerX" secondItem="kOz-Gq-HoI" secondAttribute="centerX" id="oIm-Gu-yhc"/>
+                            <constraint firstItem="ng0-i6-4sh" firstAttribute="centerX" secondItem="kOz-Gq-HoI" secondAttribute="centerX" id="r9T-dt-FJX"/>
                             <constraint firstItem="mfd-fj-5Yc" firstAttribute="centerY" secondItem="kOz-Gq-HoI" secondAttribute="centerY" id="tlm-Ig-9Hl"/>
                             <constraint firstItem="NOb-nn-fnr" firstAttribute="centerY" secondItem="kOz-Gq-HoI" secondAttribute="centerY" id="zut-bE-mWd"/>
                         </constraints>
@@ -102,6 +118,7 @@
                     <connections>
                         <outlet property="activityIndicator" destination="NOb-nn-fnr" id="Jvm-K8-s1A"/>
                         <outlet property="keyTextField" destination="vZp-3u-8fy" id="fV1-El-wDx"/>
+                        <outlet property="progressBar" destination="ng0-i6-4sh" id="5tR-dA-ohB"/>
                         <outlet property="receiveButton" destination="mfd-fj-5Yc" id="2Og-TR-EpV"/>
                     </connections>
                 </viewController>

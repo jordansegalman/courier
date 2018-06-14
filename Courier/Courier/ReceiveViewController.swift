@@ -13,24 +13,25 @@ class ReceiveViewController: UIViewController {
     @IBOutlet weak var keyTextField: UITextField!
     @IBOutlet weak var receiveButton: UIButton!
     @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
+    @IBOutlet weak var progressBar: UIProgressView!
     
-    let socketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
-    var socket: SocketIOClient!
+    struct Transfer {
+        var key: String
+        var url: URL?
+        var outputStream: OutputStream?
+        var hmacContext: CCHmacContext?
+        var cryptorRef: CCCryptorRef?
+    }
+    
+    let receiveSocketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
+    var receiveSocket: SocketIOClient!
+    static var receiving: Bool = false
+    private static var transfer: Transfer!
     
     override func viewDidLoad() {
         super.viewDidLoad()
         keyTextField.addTarget(self, action: #selector(textFieldDidChange(_:)), for: .editingChanged)
-        socket = socketManager.defaultSocket
-    }
-    
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        initializeSocketIO()
-    }
-    
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        terminateSocketIO()
+        receiveSocket = receiveSocketManager.defaultSocket
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -48,49 +49,83 @@ class ReceiveViewController: UIViewController {
     }
     
     func initializeSocketIO() {
-        socket.on(clientEvent: .connect) { data, ack in
+        receiveSocket.on(clientEvent: .connect) { data, ack in
             print("Socket.IO connected")
+            self.requestStartReceive()
         }
-        socket.on(clientEvent: .disconnect) { data, ack in
+        receiveSocket.on(clientEvent: .disconnect) { data, ack in
             print("Socket.IO disconnected")
         }
-        socket.connect()
+        receiveSocket.connect()
     }
     
     func terminateSocketIO() {
-        socket.disconnect()
-        socket.removeAllHandlers()
+        receiveSocket.disconnect()
+        receiveSocket.removeAllHandlers()
     }
     
-    @IBAction func receiveButtonTouched(_ sender: UIButton) {
-        if socket.status != .connected {
-            showSocketIOConnectionAlert()
-            return
-        }
-        if let key = keyTextField.text, !key.isEmpty && key.count == 9 {
-            keyTextField.text = ""
-            keyTextField.isHidden = true
-            receiveButton.isHidden = true
-            activityIndicator.startAnimating()
-            socket.emitWithAck("requestReceive", ["key": key]).timingOut(after: 0) { data in
+    func requestStartReceive() {
+        if receiveSocket.status == .connected {
+            receiveSocket.emitWithAck("requestStartReceive", ["key": ReceiveViewController.transfer.key]).timingOut(after: 0) { data in
                 if data.count == 1 {
-                    let dictionary = data[0] as! [String: String]
-                    self.socket.emit("received", ["key": key])
-                    self.decryptBase64AndName(encrypted: dictionary["encrypted"]!, authenticated: dictionary["authenticated"]!, salt: dictionary["salt"]!, password: "passwordpasswordpasswordpassword")
+                    ReceiveViewController.receiving = true
+                    let dictionary = data.first as! [String: String]
+                    self.initializeReceive(saltData: Data(base64Encoded: dictionary["salt"]!)!, ivData: Data(base64Encoded: dictionary["iv"]!)!, encryptedName: Data(base64Encoded: dictionary["encryptedName"]!)!)
+                    self.receive()
                 } else {
-                    self.keyTextField.isHidden = false
-                    self.receiveButton.isHidden = false
+                    self.terminateSocketIO()
+                    self.resetReceive()
+                    UIApplication.shared.isIdleTimerDisabled = false
+                    self.progressBar.isHidden = true
+                    self.progressBar.setProgress(0, animated: false)
                     self.activityIndicator.stopAnimating()
+                    self.receiveButton.isHidden = false
+                    self.keyTextField.isHidden = false
                     self.showIncorrectKeyAlert()
                 }
             }
+        } else {
+            terminateSocketIO()
+            resetReceive()
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.progressBar.isHidden = true
+            self.progressBar.setProgress(0, animated: false)
+            self.activityIndicator.stopAnimating()
+            self.receiveButton.isHidden = false
+            self.keyTextField.isHidden = false
+            showSocketIOConnectionAlert()
         }
+    }
+    
+    @IBAction func receiveButtonTouched(_ sender: UIButton) {
+        if ReceiveViewController.receiving || SendViewController.sending {
+            showTransferAlert()
+            return
+        }
+        if let key = keyTextField.text, !key.isEmpty && key.count == 9 {
+            keyTextField.resignFirstResponder()
+            keyTextField.isHidden = true
+            keyTextField.text = ""
+            receiveButton.isHidden = true
+            updateReceiveButtonState()
+            activityIndicator.startAnimating()
+            progressBar.isHidden = false
+            UIApplication.shared.isIdleTimerDisabled = true
+            ReceiveViewController.transfer = Transfer(key: key, url: nil, outputStream: nil, hmacContext: nil, cryptorRef: nil)
+            initializeSocketIO()
+        }
+    }
+    
+    func showTransferAlert() {
+        let socketIOConnectionAlertController = UIAlertController(title: "Another transfer is currently in progress.", message: nil, preferredStyle: .alert)
+        socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
     func showSocketIOConnectionAlert() {
         let socketIOConnectionAlertController = UIAlertController(title: "Not Connected", message: nil, preferredStyle: .alert)
         socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-        self.present(socketIOConnectionAlertController, animated: true, completion: nil)
+        present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
     func showIncorrectKeyAlert() {
@@ -99,10 +134,8 @@ class ReceiveViewController: UIViewController {
         present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
-    func decryptBase64AndName(encrypted: String, authenticated: String, salt: String, password: String) {
-        let encryptedData = Data(base64Encoded: encrypted)!
-        let authenticatedData = Data(base64Encoded: authenticated)!
-        let saltData = Data(base64Encoded: salt)!
+    func initializeReceive(saltData: Data, ivData: Data, encryptedName: Data) {
+        let password: String = "passwordpasswordpasswordpassword"
         let passwordData = password.data(using: .utf8)!
         var keyData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
         let derivationStatus = keyData.withUnsafeMutableBytes { keyBytes in
@@ -114,72 +147,230 @@ class ReceiveViewController: UIViewController {
             fatalError()
         }
         let encryptionKey = keyData.subdata(in: 0..<(Int(CC_SHA512_DIGEST_LENGTH) / 2))
-        let authenticationKey = keyData.subdata(in: (Int(CC_SHA512_DIGEST_LENGTH) / 2)..<Int(CC_SHA512_DIGEST_LENGTH))
-        var unauthenticatedData = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-        unauthenticatedData.withUnsafeMutableBytes { unauthenticatedBytes in
-            encryptedData.withUnsafeBytes { encryptedBytes in
-                authenticationKey.withUnsafeBytes { authenticationKeyBytes in
-                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), authenticationKeyBytes, authenticationKey.count, encryptedBytes, encryptedData.count, unauthenticatedBytes)
-                }
-            }
-        }
-        if unauthenticatedData != authenticatedData {
-            self.keyTextField.isHidden = false
-            self.receiveButton.isHidden = false
-            self.activityIndicator.stopAnimating()
-            showIncorrectPasswordAlert()
-            return
-        }
+        let hmacKey = keyData.subdata(in: (Int(CC_SHA512_DIGEST_LENGTH) / 2)..<Int(CC_SHA512_DIGEST_LENGTH))
         let keySize = encryptionKey.count
         if keySize != kCCKeySizeAES256 {
             fatalError()
         }
-        let ivSize = kCCBlockSizeAES128
-        let decryptedSize = size_t(encryptedData.count - ivSize)
-        var decryptedData = Data(count: decryptedSize)
+        ReceiveViewController.transfer.hmacContext = CCHmacContext()
+        hmacKey.withUnsafeBytes {
+            CCHmacInit(&ReceiveViewController.transfer.hmacContext!, CCHmacAlgorithm(kCCHmacAlgSHA256), $0, hmacKey.count)
+        }
+        // ADD SALT, IV, AND ENCRYPTED NAME TO RECEIVER HMAC
+        saltData.withUnsafeBytes {
+            CCHmacUpdate(&ReceiveViewController.transfer.hmacContext!, $0, saltData.count)
+        }
+        ivData.withUnsafeBytes {
+            CCHmacUpdate(&ReceiveViewController.transfer.hmacContext!, $0, ivData.count)
+        }
+        encryptedName.withUnsafeBytes {
+            CCHmacUpdate(&ReceiveViewController.transfer.hmacContext!, $0, encryptedName.count)
+        }
+        // DECRYPT NAME
+        let decryptedNameDataSize = size_t(encryptedName.count - ivData.count)
+        var decryptedNameData = Data(count: decryptedNameDataSize)
         var numBytesDecrypted: size_t = 0
-        let decryptionStatus = decryptedData.withUnsafeMutableBytes { decryptedBytes in
-            encryptedData.withUnsafeBytes { encryptedDataBytes in
+        let nameDecryptionStatus = decryptedNameData.withUnsafeMutableBytes { decryptedNameDataBytes in
+            encryptedName.withUnsafeBytes { encryptedNameBytes in
                 encryptionKey.withUnsafeBytes { encryptionKeyBytes in
-                    CCCrypt(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, keySize, encryptedDataBytes, encryptedDataBytes + ivSize, decryptedSize, decryptedBytes, decryptedSize, &numBytesDecrypted)
+                    CCCrypt(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, keySize, encryptedNameBytes, encryptedNameBytes + ivData.count, decryptedNameDataSize, decryptedNameDataBytes, decryptedNameDataSize, &numBytesDecrypted)
                 }
             }
         }
-        if decryptionStatus != kCCSuccess {
+        if nameDecryptionStatus != kCCSuccess {
             fatalError()
         }
-        decryptedData.count = numBytesDecrypted
-        if let decryptedString = String(data: decryptedData, encoding: .utf8) {
-            let decryptedStringArray = decryptedString.components(separatedBy: "$$$$$$$$")
-            let base64 = decryptedStringArray[0]
-            let name = decryptedStringArray[1]
-            self.keyTextField.isHidden = false
-            self.receiveButton.isHidden = false
+        decryptedNameData.count = numBytesDecrypted
+        guard let decryptedName = String(data: decryptedNameData, encoding: .utf8) else {
+            terminateSocketIO()
+            resetReceive()
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.progressBar.isHidden = true
+            self.progressBar.setProgress(0, animated: false)
             self.activityIndicator.stopAnimating()
-            createActivityViewController(base64: base64, name: name)
-        } else {
-            self.keyTextField.isHidden = false
             self.receiveButton.isHidden = false
-            self.activityIndicator.stopAnimating()
+            self.keyTextField.isHidden = false
             showIncorrectPasswordAlert()
+            return
         }
+        // SETUP CRYPTORS
+        ReceiveViewController.transfer.cryptorRef = encryptionKey.withUnsafeBytes { (encryptionKeyBytes: UnsafePointer<UInt8>) in
+            ivData.withUnsafeBytes { (ivBytes: UnsafePointer<UInt8>) in
+                var cryptorRefOut: CCCryptorRef?
+                let result = CCCryptorCreate(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, encryptionKey.count, ivBytes, &cryptorRefOut)
+                if result != kCCSuccess {
+                    fatalError()
+                }
+                return cryptorRefOut
+            }
+        }
+        // OPEN STREAMS
+        cleanTemporaryDirectory()
+        ReceiveViewController.transfer.url = FileManager.default.temporaryDirectory.appendingPathComponent(decryptedName)
+        ReceiveViewController.transfer.outputStream = OutputStream(url: ReceiveViewController.transfer.url!, append: true)
+        ReceiveViewController.transfer.outputStream!.open()
+    }
+    
+    func receive() {
+        receiveSocket.emitWithAck("requestReceive", ["key": ReceiveViewController.transfer.key]).timingOut(after: 0) { data in
+            if data.count == 1 {
+                let dictionary = data.first as! [String: String]
+                if dictionary["encryptedData"] != nil && dictionary["progress"] != nil {
+                    let encryptedData = Data(base64Encoded: dictionary["encryptedData"]!)!
+                    let progress = Float(dictionary["progress"]!)!
+                    self.receivedUpdate(encryptedData: encryptedData, progress: progress)
+                    self.receive()
+                } else if dictionary["hmac"] != nil {
+                    let hmac = Data(base64Encoded: dictionary["hmac"]!)!
+                    self.receivedFinal(hmac: hmac)
+                }
+            } else {
+                self.terminateSocketIO()
+                self.resetReceive()
+                UIApplication.shared.isIdleTimerDisabled = false
+                self.progressBar.isHidden = true
+                self.progressBar.setProgress(0, animated: false)
+                self.activityIndicator.stopAnimating()
+                self.receiveButton.isHidden = false
+                self.keyTextField.isHidden = false
+                self.showIncorrectKeyAlert()
+            }
+        }
+    }
+    
+    func receivedUpdate(encryptedData: Data, progress: Float) {
+        var decryptedData = Data()
+        // DECRYPT UPDATED DATA
+        encryptedData.withUnsafeBytes {
+            CCHmacUpdate(&ReceiveViewController.transfer.hmacContext!, $0, encryptedData.count)
+        }
+        let decryptedOutputLength = CCCryptorGetOutputLength(ReceiveViewController.transfer.cryptorRef!, encryptedData.count, false)
+        decryptedData.count = decryptedOutputLength
+        var decryptedOutputMoved = 0
+        let updateResult = encryptedData.withUnsafeBytes { encryptedBytes in
+            decryptedData.withUnsafeMutableBytes { decryptedBytes in
+                CCCryptorUpdate(ReceiveViewController.transfer.cryptorRef!, encryptedBytes, encryptedData.count, decryptedBytes, decryptedOutputLength, &decryptedOutputMoved)
+            }
+        }
+        if updateResult != kCCSuccess {
+            fatalError()
+        }
+        decryptedData.count = decryptedOutputMoved
+        // SEND UPDATED CHUNK TO STREAM
+        var outputData = decryptedData
+        let outputLength = outputData.count
+        if ReceiveViewController.transfer.outputStream!.hasSpaceAvailable {
+            let result = outputData.withUnsafeMutableBytes { outputBytes in
+                ReceiveViewController.transfer.outputStream!.write(outputBytes, maxLength: outputLength)
+            }
+            if result == -1 {
+                fatalError()
+            }
+        } else {
+            fatalError()
+        }
+        // UPDATE PROGRESS BAR
+        self.progressBar.setProgress(progress, animated: true)
+    }
+    
+    func receivedFinal(hmac: Data) {
+        // DECRYPT FINAL DATA
+        var decryptedData = Data()
+        var newHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+        newHmac.withUnsafeMutableBytes {
+            CCHmacFinal(&ReceiveViewController.transfer.hmacContext!, $0)
+        }
+        let decryptedOutputLength = CCCryptorGetOutputLength(ReceiveViewController.transfer.cryptorRef!, 0, true)
+        decryptedData.count = decryptedOutputLength
+        var decryptedOutputMoved = 0
+        let finalResult = decryptedData.withUnsafeMutableBytes { decryptedBytes in
+            CCCryptorFinal(ReceiveViewController.transfer.cryptorRef!, decryptedBytes, decryptedOutputLength, &decryptedOutputMoved)
+        }
+        if finalResult != kCCSuccess {
+            fatalError()
+        }
+        decryptedData.count = decryptedOutputMoved
+        // RELEASE CRYPTORS AND CLOSE STREAMS
+        CCCryptorRelease(ReceiveViewController.transfer.cryptorRef!)
+        ReceiveViewController.transfer.outputStream!.close()
+        // COMPARE HMACS, PREVENT TIMING ATTACK
+        if !hmacCompare(hmac, newHmac) {
+            terminateSocketIO()
+            resetReceive()
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.progressBar.isHidden = true
+            self.progressBar.setProgress(0, animated: false)
+            self.activityIndicator.stopAnimating()
+            self.receiveButton.isHidden = false
+            self.keyTextField.isHidden = false
+            showIncorrectPasswordAlert()
+            return
+        }
+        self.receiveSocket.emit("received", ["key": ReceiveViewController.transfer.key])
+        self.presentActivityViewController()
+    }
+    
+    func hmacCompare(_ first: Data, _ second: Data) -> Bool {
+        var compareKey = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+        let compareKeyStatus = compareKey.withUnsafeMutableBytes { compareKeyBytes in
+            SecRandomCopyBytes(kSecRandomDefault, Int(CC_SHA256_DIGEST_LENGTH), compareKeyBytes)
+        }
+        if compareKeyStatus != errSecSuccess {
+            fatalError()
+        }
+        var firstHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+        firstHmac.withUnsafeMutableBytes { firstHmacBytes in
+            first.withUnsafeBytes { firstBytes in
+                compareKey.withUnsafeBytes { compareKeyBytes in
+                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), compareKeyBytes, compareKey.count, firstBytes, first.count, firstHmacBytes)
+                }
+            }
+        }
+        var secondHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+        secondHmac.withUnsafeMutableBytes { secondHmacBytes in
+            second.withUnsafeBytes { secondBytes in
+                compareKey.withUnsafeBytes { compareKeyBytes in
+                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), compareKeyBytes, compareKey.count, secondBytes, second.count, secondHmacBytes)
+                }
+            }
+        }
+        return firstHmac == secondHmac
     }
     
     func showIncorrectPasswordAlert() {
         let socketIOConnectionAlertController = UIAlertController(title: "Incorrect Password", message: nil, preferredStyle: .alert)
         socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-        self.present(socketIOConnectionAlertController, animated: true, completion: nil)
+        present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
-    func createActivityViewController(base64: String, name: String) {
+    func presentActivityViewController() {
+        // PRESENT ACTIVITY VIEW CONTROLLER
+        let activityViewController = UIActivityViewController(activityItems: [ReceiveViewController.transfer.url!], applicationActivities: nil)
+        terminateSocketIO()
+        resetReceive()
+        UIApplication.shared.isIdleTimerDisabled = false
+        self.progressBar.isHidden = true
+        self.progressBar.setProgress(0, animated: false)
+        self.activityIndicator.stopAnimating()
+        self.receiveButton.isHidden = false
+        self.keyTextField.isHidden = false
+        present(activityViewController, animated: true, completion: nil)
+    }
+    
+    func cleanTemporaryDirectory() {
         do {
-            let decodedData: Data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters)!
-            let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-            try decodedData.write(to: fileURL, options: .atomicWrite)
-            let activityViewController = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
-            present(activityViewController, animated: true, completion: nil)
+            let temporaryDirectoryContents = try FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)
+            try temporaryDirectoryContents.forEach { file in
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent(file)
+                try FileManager.default.removeItem(at: url)
+            }
         } catch {
             fatalError()
         }
+    }
+    
+    func resetReceive() {
+        ReceiveViewController.receiving = false
+        ReceiveViewController.transfer = nil
     }
 }

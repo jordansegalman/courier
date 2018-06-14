@@ -15,79 +15,83 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     @IBOutlet weak var sendButton: UIButton!
     @IBOutlet weak var keyLabel: UILabel!
     @IBOutlet weak var activityIndicator: UIActivityIndicatorView!
+    @IBOutlet weak var progressBar: UIProgressView!
     
     struct Transfer {
         var url: URL
-        var inputStream: InputStream
-        var hmacContext: CCHmacContext
-        var cryptorRef: CCCryptorRef
+        var fileSize: UInt64?
+        var inputStream: InputStream?
+        var hmacContext: CCHmacContext?
+        var cryptorRef: CCCryptorRef?
     }
     
-    let socketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
-    var socket: SocketIOClient!
+    let sendSocketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
+    var sendSocket: SocketIOClient!
+    static var sending: Bool = false
     private static var transfer: Transfer!
-    var encryptedToSend: String!
-    var authenticatedToSend: String!
-    var saltToSend: String!
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        socket = socketManager.defaultSocket
-    }
-    
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        initializeSocketIO()
-    }
-    
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        terminateSocketIO()
+        sendSocket = sendSocketManager.defaultSocket
     }
     
     func initializeSocketIO() {
-        socket.on(clientEvent: .connect) { data, ack in
+        sendSocket.on(clientEvent: .connect) { data, ack in
             print("Socket.IO connected")
+            self.requestStartSend()
         }
-        socket.on(clientEvent: .disconnect) { data, ack in
+        sendSocket.on(clientEvent: .disconnect) { data, ack in
             print("Socket.IO disconnected")
         }
-        socket.on("requestSend") { data, ack in
+        sendSocket.on("requestStartSend") { data, ack in
             self.keyLabel.isHidden = true
             self.keyLabel.text = ""
             self.activityIndicator.startAnimating()
-            ack.with(["encrypted": self.encryptedToSend, "authenticated": self.authenticatedToSend, "salt": self.saltToSend])
+            self.progressBar.isHidden = false
+            UIApplication.shared.isIdleTimerDisabled = true
+            self.initializeSend(ack: ack)
         }
-        socket.on("received") { data, ack in
-            self.encryptedToSend = nil
-            self.authenticatedToSend = nil
-            self.saltToSend = nil
+        sendSocket.on("requestSend") { data, ack in
+            self.send(ack: ack)
+        }
+        sendSocket.on("received") { data, ack in
+            self.terminateSend()
+            self.cleanTemporaryDirectory()
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.progressBar.isHidden = true
+            self.progressBar.setProgress(0, animated: false)
             self.activityIndicator.stopAnimating()
+            self.terminateSocketIO()
+            self.resetSend()
             self.sendButton.isHidden = false
         }
-        socket.connect()
+        sendSocket.connect()
     }
     
     func terminateSocketIO() {
-        socket.disconnect()
-        socket.removeAllHandlers()
+        sendSocket.disconnect()
+        sendSocket.removeAllHandlers()
     }
     
-    func requestSendSocketIO(encrypted: String, authenticated: String, salt: String) {
-        encryptedToSend = encrypted
-        authenticatedToSend = authenticated
-        saltToSend = salt
-        socket.emitWithAck("requestSend", []).timingOut(after: 0) { data in
-            self.activityIndicator.stopAnimating()
-            let key = data[0] as! String
-            self.keyLabel.text = key
-            self.keyLabel.isHidden = false
+    func requestStartSend() {
+        if sendSocket.status == .connected {
+            sendSocket.emitWithAck("requestStartSend", []).timingOut(after: 0) { data in
+                SendViewController.sending = true
+                let key = data.first as! String
+                self.keyLabel.text = key
+                self.keyLabel.isHidden = false
+            }
+        } else {
+            terminateSocketIO()
+            resetSend()
+            sendButton.isHidden = false
+            showSocketIOConnectionAlert()
         }
     }
     
     @IBAction func sendButtonTouched(_ sender: UIButton) {
-        if socket.status != .connected {
-            showSocketIOConnectionAlert()
+        if SendViewController.sending || ReceiveViewController.receiving {
+            showTransferAlert()
             return
         }
         let alertController = UIAlertController(title: "Choose Something to Send", message: nil, preferredStyle: .actionSheet)
@@ -106,6 +110,12 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         }))
         alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
         present(alertController, animated: true, completion: nil)
+    }
+    
+    func showTransferAlert() {
+        let socketIOConnectionAlertController = UIAlertController(title: "Another transfer is currently in progress.", message: nil, preferredStyle: .alert)
+        socketIOConnectionAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
     func showSocketIOConnectionAlert() {
@@ -220,42 +230,40 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         if info[UIImagePickerControllerMediaType] as! CFString == kUTTypeImage {
             if picker.sourceType == .camera {
                 let name = UUID().uuidString + ".png"
-                var base64: String = ""
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
                 if let originalImage = info[UIImagePickerControllerOriginalImage] as? UIImage {
-                    base64 = UIImagePNGRepresentation(originalImage)!.base64EncodedString()
-                } else if let editedImage = info[UIImagePickerControllerEditedImage] as? UIImage {
-                    base64 = UIImagePNGRepresentation(editedImage)!.base64EncodedString()
-                }
-                let password = "passwordpasswordpasswordpassword"
-                encryptBase64AndName(base64: base64, name: name, password: password)
-            } else {
-                if let imageURL = info[UIImagePickerControllerImageURL] as? URL {
                     do {
-                        let name = imageURL.lastPathComponent
-                        let base64 = try Data(contentsOf: imageURL, options: .mappedIfSafe).base64EncodedString()
-                        let password = "passwordpasswordpasswordpassword"
-                        encryptBase64AndName(base64: base64, name: name, password: password)
+                        try UIImagePNGRepresentation(originalImage)!.write(to: url, options: .atomic)
+
                     } catch {
                         fatalError()
                     }
+                } else if let editedImage = info[UIImagePickerControllerEditedImage] as? UIImage {
+                    do {
+                        try UIImagePNGRepresentation(editedImage)!.write(to: url, options: .atomic)
+                    } catch {
+                        fatalError()
+                    }
+                }
+                SendViewController.transfer = Transfer(url: url, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
+                initializeSocketIO()
+            } else {
+                if let imageURL = info[UIImagePickerControllerImageURL] as? URL {
+                    SendViewController.transfer = Transfer(url: imageURL, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
+                    initializeSocketIO()
                 }
             }
         }
         if info[UIImagePickerControllerMediaType] as! CFString == kUTTypeMovie {
             if let mediaURL = info[UIImagePickerControllerMediaURL] as? URL {
-                do {
-                    let name = mediaURL.lastPathComponent
-                    let base64 = try Data(contentsOf: mediaURL, options: .mappedIfSafe).base64EncodedString()
-                    let password = "passwordpasswordpasswordpassword"
-                    encryptBase64AndName(base64: base64, name: name, password: password)
-                } catch {
-                    fatalError()
-                }
+                SendViewController.transfer = Transfer(url: mediaURL, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
+                initializeSocketIO()
             }
         }
     }
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        terminateSocketIO()
         sendButton.isHidden = false
         dismiss(animated: true, completion: nil)
     }
@@ -263,291 +271,28 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         dismiss(animated: true, completion: nil)
         if urls.count == 1 {
-            do {
-                let name = urls[0].lastPathComponent
-                
-                //------------------------------------------------
-                
-                // !!!!!!! Store url on sender, send transfer ready to server and get key, send transfer request from receiver with key, once confirms transfer send salt, iv, and iv hmac to receiver, receiver request first chunk, open url and start transferring chunks (wait for request, ack chunk, wait for response, ack chunk...), ack receiver no more chunks after FINAL chunk sent, close streams, open url on receiver !!!!!!!
-                
-                // GENERATE SALT, ENCRYPTION KEY, HMAC KEY, AND IV
-                let nameData = name.data(using: .utf8)!
-                let tempPassword: String = "passwordpasswordpasswordpassword"
-                let tempPasswordData = tempPassword.data(using: .utf8)!
-                var saltData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
-                let saltStatus = saltData.withUnsafeMutableBytes { saltBytes in
-                    SecRandomCopyBytes(kSecRandomDefault, Int(CC_SHA512_DIGEST_LENGTH), saltBytes)
-                }
-                if saltStatus != errSecSuccess {
-                    fatalError()
-                }
-                var keyData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
-                let derivationStatus = keyData.withUnsafeMutableBytes { keyBytes in
-                    saltData.withUnsafeBytes { saltBytes in
-                        CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), tempPassword, tempPasswordData.count, saltBytes, Int(CC_SHA512_DIGEST_LENGTH), CCPBKDFAlgorithm(kCCPRFHmacAlgSHA512), 100000, keyBytes, Int(CC_SHA512_DIGEST_LENGTH))
-                    }
-                }
-                if derivationStatus != kCCSuccess {
-                    fatalError()
-                }
-                let encryptionKey = keyData.subdata(in: 0..<(Int(CC_SHA512_DIGEST_LENGTH) / 2))
-                let hmacKey = keyData.subdata(in: (Int(CC_SHA512_DIGEST_LENGTH) / 2)..<Int(CC_SHA512_DIGEST_LENGTH))
-                let keySize = encryptionKey.count
-                if keySize != kCCKeySizeAES256 {
-                    fatalError()
-                }
-                var hmacContext = CCHmacContext()
-                hmacKey.withUnsafeBytes {
-                    CCHmacInit(&hmacContext, CCHmacAlgorithm(kCCHmacAlgSHA256), $0, hmacKey.count)
-                }
-                var hmacContext2 = CCHmacContext()
-                hmacKey.withUnsafeBytes {
-                    CCHmacInit(&hmacContext2, CCHmacAlgorithm(kCCHmacAlgSHA256), $0, hmacKey.count)
-                }
-                let ivSize = kCCBlockSizeAES128
-                var ivData = Data(count: ivSize)
-                let ivStatus = ivData.withUnsafeMutableBytes { ivBytes in
-                    SecRandomCopyBytes(kSecRandomDefault, ivSize, ivBytes)
-                }
-                if ivStatus != errSecSuccess {
-                    fatalError()
-                }
-                // ENCRYPT NAME
-                let encryptedNameSize = size_t(nameData.count + kCCBlockSizeAES128 + ivSize)
-                var encryptedName = Data(count: encryptedNameSize)
-                var numBytesEncrypted: size_t = 0
-                let nameEncryptionStatus = encryptedName.withUnsafeMutableBytes { encryptedNameBytes in
-                    nameData.withUnsafeBytes { nameBytes in
-                        encryptionKey.withUnsafeBytes { encryptionKeyBytes in
-                            CCCrypt(CCOperation(kCCEncrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, keySize, encryptedNameBytes, nameBytes, nameData.count, encryptedNameBytes + ivSize, encryptedNameSize, &numBytesEncrypted)
-                        }
-                    }
-                }
-                if nameEncryptionStatus != kCCSuccess {
-                    fatalError()
-                }
-                encryptedName.count = numBytesEncrypted + ivSize
-                // ADD SALT, IV, AND ENCRYPTED NAME TO SENDER HMAC
-                saltData.withUnsafeBytes {
-                    CCHmacUpdate(&hmacContext, $0, saltData.count)
-                }
-                ivData.withUnsafeBytes {
-                    CCHmacUpdate(&hmacContext, $0, ivData.count)
-                }
-                encryptedName.withUnsafeBytes {
-                    CCHmacUpdate(&hmacContext, $0, encryptedName.count)
-                }
-                // SEND SALT, IV, AND ENCRYPTED NAME TO RECEIVER
-                // ADD SALT, IV, AND ENCRYPTED NAME TO RECEIVER HMAC
-                saltData.withUnsafeBytes {
-                    CCHmacUpdate(&hmacContext2, $0, saltData.count)
-                }
-                ivData.withUnsafeBytes {
-                    CCHmacUpdate(&hmacContext2, $0, ivData.count)
-                }
-                encryptedName.withUnsafeBytes {
-                    CCHmacUpdate(&hmacContext2, $0, encryptedName.count)
-                }
-                // DECRYPT NAME
-                let decryptedNameDataSize = size_t(encryptedName.count - ivSize)
-                var decryptedNameData = Data(count: decryptedNameDataSize)
-                var numBytesDecrypted: size_t = 0
-                let nameDecryptionStatus = decryptedNameData.withUnsafeMutableBytes { decryptedNameDataBytes in
-                    encryptedName.withUnsafeBytes { encryptedNameBytes in
-                        encryptionKey.withUnsafeBytes { encryptionKeyBytes in
-                            CCCrypt(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, keySize, encryptedNameBytes, encryptedNameBytes + ivSize, decryptedNameDataSize, decryptedNameDataBytes, decryptedNameDataSize, &numBytesDecrypted)
-                        }
-                    }
-                }
-                if nameDecryptionStatus != kCCSuccess {
-                    fatalError()
-                }
-                decryptedNameData.count = numBytesDecrypted
-                let decryptedName = String(data: decryptedNameData, encoding: .utf8)!
-                // SETUP CRYPTORS
-                let cryptorRef: CCCryptorRef?
-                var encryptedData = Data()
-                cryptorRef = encryptionKey.withUnsafeBytes { (encryptionKeyBytes: UnsafePointer<UInt8>) in
-                    ivData.withUnsafeBytes { (ivBytes: UnsafePointer<UInt8>) in
-                        var cryptorRefOut: CCCryptorRef?
-                        let result = CCCryptorCreate(CCOperation(kCCEncrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, encryptionKey.count, ivBytes, &cryptorRefOut)
-                        if result != kCCSuccess {
-                            fatalError()
-                        }
-                        return cryptorRefOut
-                    }
-                }
-                let cryptorRef2: CCCryptorRef?
-                var decryptedData = Data()
-                cryptorRef2 = encryptionKey.withUnsafeBytes { (encryptionKeyBytes: UnsafePointer<UInt8>) in
-                    ivData.withUnsafeBytes { (ivBytes: UnsafePointer<UInt8>) in
-                        var cryptorRefOut: CCCryptorRef?
-                        let result = CCCryptorCreate(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, encryptionKey.count, ivBytes, &cryptorRefOut)
-                        if result != kCCSuccess {
-                            fatalError()
-                        }
-                        return cryptorRefOut
-                    }
-                }
-                // OPEN STREAMS
-                var inputData = Data(count: 1048576)
-                let inputLength = inputData.count
-                let inputStream: InputStream = InputStream(url: urls[0])!
-                let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(decryptedName)
-                let outputStream: OutputStream = OutputStream(url: outputURL, append: true)!
-                outputStream.open()
-                inputStream.open()
-                // CHANGE TO IF STATEMENT AND ONLY CALL WHEN RECEIVER REQUESTS
-                while inputStream.hasBytesAvailable {
-                    let result = inputData.withUnsafeMutableBytes { inputBytes in
-                        inputStream.read(inputBytes, maxLength: inputLength)
-                    }
-                    if result == -1 {
-                        fatalError()
-                    }
-                    // ENCRYPT UPDATED DATA
-                    let encryptedOutputLength = CCCryptorGetOutputLength(cryptorRef, inputData.count, false)
-                    encryptedData.count = encryptedOutputLength
-                    var encryptedOutputMoved = 0
-                    let updateResult = inputData.withUnsafeBytes { inputBytes in
-                        encryptedData.withUnsafeMutableBytes { encryptedBytes in
-                            CCCryptorUpdate(cryptorRef, inputBytes, inputLength, encryptedBytes, encryptedOutputLength, &encryptedOutputMoved)
-                        }
-                    }
-                    if updateResult != kCCSuccess {
-                        fatalError()
-                    }
-                    encryptedData.count = encryptedOutputMoved
-                    encryptedData.withUnsafeBytes {
-                        CCHmacUpdate(&hmacContext, $0, encryptedData.count)
-                    }
-                    // SEND encryptedData TO RECEIVER
-                    // DECRYPT UPDATED DATA
-                    encryptedData.withUnsafeBytes {
-                        CCHmacUpdate(&hmacContext2, $0, encryptedData.count)
-                    }
-                    let decryptedOutputLength = CCCryptorGetOutputLength(cryptorRef2, encryptedData.count, false)
-                    decryptedData.count = decryptedOutputLength
-                    var decryptedOutputMoved = 0
-                    let updateResult2 = encryptedData.withUnsafeBytes { encryptedBytes in
-                        decryptedData.withUnsafeMutableBytes { decryptedBytes in
-                            CCCryptorUpdate(cryptorRef2, encryptedBytes, encryptedOutputMoved, decryptedBytes, decryptedOutputLength, &decryptedOutputMoved)
-                        }
-                    }
-                    if updateResult2 != kCCSuccess {
-                        fatalError()
-                    }
-                    decryptedData.count = decryptedOutputMoved
-                    // SEND UPDATED CHUNK TO STREAM
-                    var outputData = decryptedData
-                    let outputLength = outputData.count
-                    if outputStream.hasSpaceAvailable {
-                        let result = outputData.withUnsafeMutableBytes { outputBytes in
-                            outputStream.write(outputBytes, maxLength: outputLength)
-                        }
-                        if result == -1 {
-                            fatalError()
-                        }
-                    } else {
-                        fatalError()
-                    }
-                }
-                // ENCRYPT FINAL DATA
-                let encryptedOutputLength = CCCryptorGetOutputLength(cryptorRef, 0, true)
-                encryptedData.count = encryptedOutputLength
-                var encryptedOutputMoved = 0
-                let finalResult = encryptedData.withUnsafeMutableBytes { encryptedBytes in
-                    CCCryptorFinal(cryptorRef, encryptedBytes, encryptedOutputLength, &encryptedOutputMoved)
-                }
-                if finalResult != kCCSuccess {
-                    fatalError()
-                }
-                encryptedData.count = encryptedOutputMoved
-                var hmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-                hmac.withUnsafeMutableBytes {
-                    CCHmacFinal(&hmacContext, $0)
-                }
-                // DECRYPT FINAL DATA
-                var hmac2 = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-                hmac2.withUnsafeMutableBytes {
-                    CCHmacFinal(&hmacContext2, $0)
-                }
-                let decryptedOutputLength = CCCryptorGetOutputLength(cryptorRef2, 0, true)
-                decryptedData.count = decryptedOutputLength
-                var decryptedOutputMoved = 0
-                let finalResult2 = decryptedData.withUnsafeMutableBytes { decryptedBytes in
-                    CCCryptorFinal(cryptorRef2, decryptedBytes, decryptedOutputLength, &decryptedOutputMoved)
-                }
-                if finalResult2 != kCCSuccess {
-                    fatalError()
-                }
-                decryptedData.count = decryptedOutputMoved
-                // RELEASE CRYPTORS AND CLOSE STREAMS
-                if cryptorRef != nil {
-                    CCCryptorRelease(cryptorRef)
-                }
-                if cryptorRef2 != nil {
-                    CCCryptorRelease(cryptorRef2)
-                }
-                inputStream.close()
-                outputStream.close()
-                // COMPARE HMACS AND PREVENT TIMING ATTACK
-                if !hmacCompare(hmac, hmac2) {
-                    fatalError()
-                }
-                // DELETE FINAL DIR FILES, COPY TEMP DIR TO FINAL DIR, DELETE TEMP DIR FILES
-                // PRESENT ACTIVITY VIEW CONTROLLER
-                let activityViewController = UIActivityViewController(activityItems: [outputURL], applicationActivities: nil)
-                present(activityViewController, animated: true, completion: nil)
-                return
-                
-                //------------------------------------------------
-                
-                let base64 = try Data(contentsOf: urls[0], options: .mappedIfSafe).base64EncodedString()
-                let password = "passwordpasswordpasswordpassword"
-                encryptBase64AndName(base64: base64, name: name, password: password)
-            } catch {
-                fatalError()
-            }
+            SendViewController.transfer = Transfer(url: urls.first!, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
+            initializeSocketIO()
         }
     }
     
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        terminateSocketIO()
         sendButton.isHidden = false
         dismiss(animated: true, completion: nil)
     }
     
-    func hmacCompare(_ first: Data, _ second: Data) -> Bool {
-        var compareKey = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-        let compareKeyStatus = compareKey.withUnsafeMutableBytes { compareKeyBytes in
-            SecRandomCopyBytes(kSecRandomDefault, Int(CC_SHA256_DIGEST_LENGTH), compareKeyBytes)
-        }
-        if compareKeyStatus != errSecSuccess {
+    func initializeSend(ack: SocketAckEmitter) {
+        // GET FILESIZE
+        let url = SendViewController.transfer.url
+        do {
+            let attr = try FileManager.default.attributesOfItem(atPath: url.path)
+            SendViewController.transfer.fileSize = attr[.size] as? UInt64
+        } catch {
             fatalError()
         }
-        var firstHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-        firstHmac.withUnsafeMutableBytes { firstHmacBytes in
-            first.withUnsafeBytes { firstBytes in
-                compareKey.withUnsafeBytes { compareKeyBytes in
-                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), compareKeyBytes, compareKey.count, firstBytes, first.count, firstHmacBytes)
-                }
-            }
-        }
-        var secondHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-        secondHmac.withUnsafeMutableBytes { secondHmacBytes in
-            second.withUnsafeBytes { secondBytes in
-                compareKey.withUnsafeBytes { compareKeyBytes in
-                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), compareKeyBytes, compareKey.count, secondBytes, second.count, secondHmacBytes)
-                }
-            }
-        }
-        return firstHmac == secondHmac
-    }
-    
-    func encryptBase64AndName(base64: String, name: String, password: String) {
-        activityIndicator.startAnimating()
-        let toEncrypt = base64 + "$$$$$$$$" + name
-        let toEncryptData = toEncrypt.data(using: .utf8)!
+        // GENERATE SALT, ENCRYPTION KEY, HMAC KEY, AND IV
+        let password: String = "passwordpasswordpasswordpassword"
         let passwordData = password.data(using: .utf8)!
         var saltData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
         let saltStatus = saltData.withUnsafeMutableBytes { saltBytes in
@@ -566,46 +311,142 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             fatalError()
         }
         let encryptionKey = keyData.subdata(in: 0..<(Int(CC_SHA512_DIGEST_LENGTH) / 2))
-        let authenticationKey = keyData.subdata(in: (Int(CC_SHA512_DIGEST_LENGTH) / 2)..<Int(CC_SHA512_DIGEST_LENGTH))
+        let hmacKey = keyData.subdata(in: (Int(CC_SHA512_DIGEST_LENGTH) / 2)..<Int(CC_SHA512_DIGEST_LENGTH))
         let keySize = encryptionKey.count
         if keySize != kCCKeySizeAES256 {
             fatalError()
         }
+        SendViewController.transfer.hmacContext = CCHmacContext()
+        hmacKey.withUnsafeBytes {
+            CCHmacInit(&SendViewController.transfer.hmacContext!, CCHmacAlgorithm(kCCHmacAlgSHA256), $0, hmacKey.count)
+        }
         let ivSize = kCCBlockSizeAES128
-        let encryptedSize = size_t(toEncryptData.count + kCCBlockSizeAES128 + ivSize)
-        var encryptedData = Data(count: encryptedSize)
-        let ivStatus = encryptedData.withUnsafeMutableBytes { ivBytes in
+        var ivData = Data(count: ivSize)
+        let ivStatus = ivData.withUnsafeMutableBytes { ivBytes in
             SecRandomCopyBytes(kSecRandomDefault, ivSize, ivBytes)
         }
         if ivStatus != errSecSuccess {
             fatalError()
         }
+        // ENCRYPT NAME
+        let name = url.lastPathComponent
+        let nameData = name.data(using: .utf8)!
+        let encryptedNameSize = size_t(nameData.count + kCCBlockSizeAES128 + ivSize)
+        var encryptedName = Data(count: encryptedNameSize)
         var numBytesEncrypted: size_t = 0
-        let encryptionStatus = encryptedData.withUnsafeMutableBytes { encryptedBytes in
-            toEncryptData.withUnsafeBytes { toEncryptDataBytes in
+        let nameEncryptionStatus = encryptedName.withUnsafeMutableBytes { encryptedNameBytes in
+            nameData.withUnsafeBytes { nameBytes in
                 encryptionKey.withUnsafeBytes { encryptionKeyBytes in
-                    CCCrypt(CCOperation(kCCEncrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, keySize, encryptedBytes, toEncryptDataBytes, toEncryptData.count, encryptedBytes + ivSize, encryptedSize, &numBytesEncrypted)
+                    CCCrypt(CCOperation(kCCEncrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, keySize, encryptedNameBytes, nameBytes, nameData.count, encryptedNameBytes + ivSize, encryptedNameSize, &numBytesEncrypted)
                 }
             }
         }
-        if encryptionStatus != kCCSuccess {
+        if nameEncryptionStatus != kCCSuccess {
             fatalError()
         }
-        encryptedData.count = numBytesEncrypted + ivSize
-        var authenticatedData = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-        authenticatedData.withUnsafeMutableBytes { authenticatedBytes in
-            encryptedData.withUnsafeBytes { encryptedBytes in
-                authenticationKey.withUnsafeBytes { authenticationKeyBytes in
-                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), authenticationKeyBytes, authenticationKey.count, encryptedBytes, encryptedData.count, authenticatedBytes)
+        encryptedName.count = numBytesEncrypted + ivSize
+        // ADD SALT, IV, AND ENCRYPTED NAME TO SENDER HMAC
+        saltData.withUnsafeBytes {
+            CCHmacUpdate(&SendViewController.transfer.hmacContext!, $0, saltData.count)
+        }
+        ivData.withUnsafeBytes {
+            CCHmacUpdate(&SendViewController.transfer.hmacContext!, $0, ivData.count)
+        }
+        encryptedName.withUnsafeBytes {
+            CCHmacUpdate(&SendViewController.transfer.hmacContext!, $0, encryptedName.count)
+        }
+        // SETUP CRYPTORS
+        SendViewController.transfer.cryptorRef = encryptionKey.withUnsafeBytes { (encryptionKeyBytes: UnsafePointer<UInt8>) in
+            ivData.withUnsafeBytes { (ivBytes: UnsafePointer<UInt8>) in
+                var cryptorRefOut: CCCryptorRef?
+                let result = CCCryptorCreate(CCOperation(kCCEncrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), encryptionKeyBytes, encryptionKey.count, ivBytes, &cryptorRefOut)
+                if result != kCCSuccess {
+                    fatalError()
                 }
+                return cryptorRefOut
             }
         }
-        if socket.status == .connected {
-            requestSendSocketIO(encrypted: encryptedData.base64EncodedString(), authenticated: authenticatedData.base64EncodedString(), salt: saltData.base64EncodedString())
+        // OPEN STREAMS
+        SendViewController.transfer.inputStream = InputStream(url: url)
+        SendViewController.transfer.inputStream!.open()
+        // SEND SALT, IV, AND ENCRYPTED NAME TO RECEIVER
+        ack.with(["salt": saltData.base64EncodedString(), "iv": ivData.base64EncodedString(), "encryptedName": encryptedName.base64EncodedString()])
+    }
+    
+    func send(ack: SocketAckEmitter) {
+        var inputData = Data(count: 1048576)
+        let inputLength = inputData.count
+        var encryptedData = Data()
+        if SendViewController.transfer.inputStream!.hasBytesAvailable {
+            let result = inputData.withUnsafeMutableBytes { inputBytes in
+                SendViewController.transfer.inputStream!.read(inputBytes, maxLength: inputLength)
+            }
+            if result == -1 {
+                fatalError()
+            }
+            // ENCRYPT UPDATED DATA
+            let encryptedOutputLength = CCCryptorGetOutputLength(SendViewController.transfer.cryptorRef!, inputData.count, false)
+            encryptedData.count = encryptedOutputLength
+            var encryptedOutputMoved = 0
+            let updateResult = inputData.withUnsafeBytes { inputBytes in
+                encryptedData.withUnsafeMutableBytes { encryptedBytes in
+                    CCCryptorUpdate(SendViewController.transfer.cryptorRef!, inputBytes, inputLength, encryptedBytes, encryptedOutputLength, &encryptedOutputMoved)
+                }
+            }
+            if updateResult != kCCSuccess {
+                fatalError()
+            }
+            encryptedData.count = encryptedOutputMoved
+            encryptedData.withUnsafeBytes {
+                CCHmacUpdate(&SendViewController.transfer.hmacContext!, $0, encryptedData.count)
+            }
+            // GET TRANSFER PROGRESS
+            let progress = (SendViewController.transfer.inputStream!.property(forKey: .fileCurrentOffsetKey) as! NSNumber).floatValue / Float(SendViewController.transfer.fileSize!)
+            // UPDATE PROGRESS BAR
+            self.progressBar.setProgress(progress, animated: true)
+            // SEND encryptedData TO RECEIVER
+            ack.with(["encryptedData": encryptedData.base64EncodedString(), "progress": String(progress)])
         } else {
-            activityIndicator.stopAnimating()
-            sendButton.isHidden = false
-            showSocketIOConnectionAlert()
+            // ENCRYPT FINAL DATA
+            let encryptedOutputLength = CCCryptorGetOutputLength(SendViewController.transfer.cryptorRef!, 0, true)
+            encryptedData.count = encryptedOutputLength
+            var encryptedOutputMoved = 0
+            let finalResult = encryptedData.withUnsafeMutableBytes { encryptedBytes in
+                CCCryptorFinal(SendViewController.transfer.cryptorRef!, encryptedBytes, encryptedOutputLength, &encryptedOutputMoved)
+            }
+            if finalResult != kCCSuccess {
+                fatalError()
+            }
+            encryptedData.count = encryptedOutputMoved
+            var hmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+            hmac.withUnsafeMutableBytes {
+                CCHmacFinal(&SendViewController.transfer.hmacContext!, $0)
+            }
+            // SEND hmac TO RECEIVER
+            ack.with(["hmac": hmac.base64EncodedString()])
         }
+    }
+    
+    func terminateSend() {
+        // RELEASE CRYPTORS AND CLOSE STREAMS
+        CCCryptorRelease(SendViewController.transfer.cryptorRef!)
+        SendViewController.transfer.inputStream!.close()
+    }
+    
+    func cleanTemporaryDirectory() {
+        do {
+            let temporaryDirectoryContents = try FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)
+            try temporaryDirectoryContents.forEach { file in
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent(file)
+                try FileManager.default.removeItem(at: url)
+            }
+        } catch {
+            fatalError()
+        }
+    }
+    
+    func resetSend() {
+        SendViewController.sending = false
+        SendViewController.transfer = nil
     }
 }
