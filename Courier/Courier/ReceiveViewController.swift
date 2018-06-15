@@ -23,7 +23,7 @@ class ReceiveViewController: UIViewController {
         var cryptorRef: CCCryptorRef?
     }
     
-    let receiveSocketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
+    var receiveSocketManager: SocketManager!
     var receiveSocket: SocketIOClient!
     static var receiving: Bool = false
     private static var transfer: Transfer!
@@ -31,7 +31,7 @@ class ReceiveViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         keyTextField.addTarget(self, action: #selector(textFieldDidChange(_:)), for: .editingChanged)
-        receiveSocket = receiveSocketManager.defaultSocket
+        initializeSocketIO()
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -49,6 +49,11 @@ class ReceiveViewController: UIViewController {
     }
     
     func initializeSocketIO() {
+        receiveSocketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
+        receiveSocket = receiveSocketManager.defaultSocket
+    }
+    
+    func setupSocketIO() {
         receiveSocket.on(clientEvent: .connect) { data, ack in
             print("Socket.IO connected")
             self.requestStartReceive()
@@ -56,27 +61,48 @@ class ReceiveViewController: UIViewController {
         receiveSocket.on(clientEvent: .disconnect) { data, ack in
             print("Socket.IO disconnected")
         }
-        receiveSocket.connect()
+        receiveSocket.on(clientEvent: .error) { data, ack in
+            print("Socket.IO error")
+            self.terminateSocketIO()
+            self.resetReceive()
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.progressBar.isHidden = true
+            self.progressBar.setProgress(0, animated: false)
+            self.activityIndicator.stopAnimating()
+            self.receiveButton.isHidden = false
+            self.keyTextField.isHidden = false
+            self.showSocketIOConnectionAlert()
+        }
+        receiveSocket.connect(timeoutAfter: 5) {
+            print("Socket.IO error")
+            self.terminateSocketIO()
+            self.resetReceive()
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.progressBar.isHidden = true
+            self.progressBar.setProgress(0, animated: false)
+            self.activityIndicator.stopAnimating()
+            self.receiveButton.isHidden = false
+            self.keyTextField.isHidden = false
+            self.showSocketIOConnectionAlert()
+        }
     }
     
     func terminateSocketIO() {
         receiveSocket.disconnect()
         receiveSocket.removeAllHandlers()
+        initializeSocketIO()
     }
     
     func requestStartReceive() {
         if receiveSocket.status == .connected {
             receiveSocket.emitWithAck("requestStartReceive", ["key": ReceiveViewController.transfer.key]).timingOut(after: 0) { data in
                 if data.count == 1 {
-                    ReceiveViewController.receiving = true
                     let dictionary = data.first as! [String: String]
                     self.showPasswordEntryAlert(saltData: Data(base64Encoded: dictionary["salt"]!)!, ivData: Data(base64Encoded: dictionary["iv"]!)!, encryptedName: Data(base64Encoded: dictionary["encryptedName"]!)!)
                 } else {
                     self.terminateSocketIO()
                     self.resetReceive()
                     UIApplication.shared.isIdleTimerDisabled = false
-                    self.progressBar.isHidden = true
-                    self.progressBar.setProgress(0, animated: false)
                     self.activityIndicator.stopAnimating()
                     self.receiveButton.isHidden = false
                     self.keyTextField.isHidden = false
@@ -87,8 +113,6 @@ class ReceiveViewController: UIViewController {
             terminateSocketIO()
             resetReceive()
             UIApplication.shared.isIdleTimerDisabled = false
-            self.progressBar.isHidden = true
-            self.progressBar.setProgress(0, animated: false)
             self.activityIndicator.stopAnimating()
             self.receiveButton.isHidden = false
             self.keyTextField.isHidden = false
@@ -102,16 +126,16 @@ class ReceiveViewController: UIViewController {
             return
         }
         if let key = keyTextField.text, !key.isEmpty && key.count == 9 {
+            ReceiveViewController.receiving = true
             keyTextField.resignFirstResponder()
             keyTextField.isHidden = true
             keyTextField.text = ""
             receiveButton.isHidden = true
             updateReceiveButtonState()
             activityIndicator.startAnimating()
-            progressBar.isHidden = false
             UIApplication.shared.isIdleTimerDisabled = true
             ReceiveViewController.transfer = Transfer(key: key, url: nil, outputStream: nil, hmacContext: nil, cryptorRef: nil)
-            initializeSocketIO()
+            setupSocketIO()
         }
     }
     
@@ -151,8 +175,6 @@ class ReceiveViewController: UIViewController {
             self.terminateSocketIO()
             self.resetReceive()
             UIApplication.shared.isIdleTimerDisabled = false
-            self.progressBar.isHidden = true
-            self.progressBar.setProgress(0, animated: false)
             self.activityIndicator.stopAnimating()
             self.receiveButton.isHidden = false
             self.keyTextField.isHidden = false
@@ -235,6 +257,7 @@ class ReceiveViewController: UIViewController {
         ReceiveViewController.transfer.url = FileManager.default.temporaryDirectory.appendingPathComponent(decryptedName)
         ReceiveViewController.transfer.outputStream = OutputStream(url: ReceiveViewController.transfer.url!, append: true)
         ReceiveViewController.transfer.outputStream!.open()
+        progressBar.isHidden = false
         receive()
     }
     

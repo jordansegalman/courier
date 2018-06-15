@@ -26,23 +26,36 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         var cryptorRef: CCCryptorRef?
     }
     
-    let sendSocketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
+    var sendSocketManager: SocketManager!
     var sendSocket: SocketIOClient!
     static var sending: Bool = false
     private static var transfer: Transfer!
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        sendSocket = sendSocketManager.defaultSocket
+        initializeSocketIO()
     }
     
     func initializeSocketIO() {
+        sendSocketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
+        sendSocket = sendSocketManager.defaultSocket
+    }
+    
+    func setupSocketIO() {
         sendSocket.on(clientEvent: .connect) { data, ack in
             print("Socket.IO connected")
-            self.requestStartSend()
+            self.beginSend()
         }
         sendSocket.on(clientEvent: .disconnect) { data, ack in
             print("Socket.IO disconnected")
+        }
+        sendSocket.on(clientEvent: .error) { data, ack in
+            print("Socket.IO error")
+            self.terminateSocketIO()
+            self.resetSend()
+            self.activityIndicator.stopAnimating()
+            self.sendButton.isHidden = false
+            self.showSocketIOConnectionAlert()
         }
         sendSocket.on("requestStartSend") { data, ack in
             self.keyLabel.isHidden = true
@@ -65,18 +78,25 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             self.resetSend()
             self.sendButton.isHidden = false
         }
-        sendSocket.connect()
+        sendSocket.connect(timeoutAfter: 5) {
+            print("Socket.IO error")
+            self.terminateSocketIO()
+            self.resetSend()
+            self.activityIndicator.stopAnimating()
+            self.sendButton.isHidden = false
+            self.showSocketIOConnectionAlert()
+        }
     }
     
     func terminateSocketIO() {
         sendSocket.disconnect()
         sendSocket.removeAllHandlers()
+        initializeSocketIO()
     }
     
     func requestStartSend() {
         if sendSocket.status == .connected {
             sendSocket.emitWithAck("requestStartSend", []).timingOut(after: 0) { data in
-                SendViewController.sending = true
                 let key = data.first as! String
                 self.keyLabel.text = key
                 self.keyLabel.isHidden = false
@@ -94,6 +114,14 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             showTransferAlert()
             return
         }
+        SendViewController.sending = true
+        sendButton.isHidden = true
+        activityIndicator.startAnimating()
+        setupSocketIO()
+    }
+    
+    func beginSend() {
+        activityIndicator.stopAnimating()
         cleanTemporaryDirectory()
         let alertController = UIAlertController(title: "Choose Something to Send", message: nil, preferredStyle: .actionSheet)
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -109,7 +137,11 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         alertController.addAction(UIAlertAction(title: "Files", style: .default, handler: { (UIAlertAction) in
             self.openDocument()
         }))
-        alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+        alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { (UIAlertAction) in
+            self.terminateSocketIO()
+            self.resetSend()
+            self.sendButton.isHidden = false
+        }))
         present(alertController, animated: true, completion: nil)
     }
     
@@ -145,7 +177,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             case .denied:
                 showPermissionsAlert(sourceType: .camera)
             case .notDetermined:
-                AVCaptureDevice.requestAccess(for: .video, completionHandler: {accessGranted in
+                AVCaptureDevice.requestAccess(for: .video, completionHandler: { accessGranted in
                     if accessGranted {
                         self.checkMicrophonePermissions()
                     }
@@ -197,6 +229,9 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             UIApplication.shared.open(URL(string: UIApplicationOpenSettingsURLString)!, options: [:], completionHandler: nil)
         }))
         permissionsAlertController.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+        terminateSocketIO()
+        resetSend()
+        sendButton.isHidden = false
         present(permissionsAlertController, animated: true, completion: nil)
     }
     
@@ -209,7 +244,6 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
 
     func openCamera() {
-        sendButton.isHidden = true
         let imagePickerController = UIImagePickerController()
         imagePickerController.sourceType = .camera
         imagePickerController.mediaTypes = UIImagePickerController.availableMediaTypes(for: .camera)!
@@ -219,7 +253,6 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func openPhotoLibrary() {
-        sendButton.isHidden = true
         let imagePickerController = UIImagePickerController()
         imagePickerController.sourceType = .photoLibrary
         imagePickerController.mediaTypes = UIImagePickerController.availableMediaTypes(for: .photoLibrary)!
@@ -229,7 +262,6 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func openDocument() {
-        sendButton.isHidden = true
         let documentPickerController = UIDocumentPickerViewController(documentTypes: [kUTTypeItem as String], in: .import)
         documentPickerController.allowsMultipleSelection = false
         documentPickerController.modalPresentationStyle = .fullScreen
@@ -259,24 +291,25 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
                     }
                 }
                 SendViewController.transfer = Transfer(url: url, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
-                initializeSocketIO()
+                requestStartSend()
             } else {
                 if let imageURL = info[UIImagePickerControllerImageURL] as? URL {
                     SendViewController.transfer = Transfer(url: imageURL, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
-                    initializeSocketIO()
+                    requestStartSend()
                 }
             }
         }
         if info[UIImagePickerControllerMediaType] as! CFString == kUTTypeMovie {
             if let mediaURL = info[UIImagePickerControllerMediaURL] as? URL {
                 SendViewController.transfer = Transfer(url: mediaURL, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
-                initializeSocketIO()
+                requestStartSend()
             }
         }
     }
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         terminateSocketIO()
+        resetSend()
         sendButton.isHidden = false
         dismiss(animated: true, completion: nil)
     }
@@ -285,12 +318,13 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         dismiss(animated: true, completion: nil)
         if urls.count == 1 {
             SendViewController.transfer = Transfer(url: urls.first!, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
-            initializeSocketIO()
+            requestStartSend()
         }
     }
     
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
         terminateSocketIO()
+        resetSend()
         sendButton.isHidden = false
         dismiss(animated: true, completion: nil)
     }
