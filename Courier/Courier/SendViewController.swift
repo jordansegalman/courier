@@ -19,6 +19,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     
     struct Transfer {
         var url: URL
+        var bytesSent: UInt64
         var fileSize: UInt64?
         var inputStream: InputStream?
         var hmacContext: CCHmacContext?
@@ -257,18 +258,18 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
                         fatalError()
                     }
                 }
-                SendViewController.transfer = Transfer(url: url, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
+                SendViewController.transfer = Transfer(url: url, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
                 initializeSocketIO()
             } else {
                 if let imageURL = info[UIImagePickerControllerImageURL] as? URL {
-                    SendViewController.transfer = Transfer(url: imageURL, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
+                    SendViewController.transfer = Transfer(url: imageURL, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
                     initializeSocketIO()
                 }
             }
         }
         if info[UIImagePickerControllerMediaType] as! CFString == kUTTypeMovie {
             if let mediaURL = info[UIImagePickerControllerMediaURL] as? URL {
-                SendViewController.transfer = Transfer(url: mediaURL, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
+                SendViewController.transfer = Transfer(url: mediaURL, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
                 initializeSocketIO()
             }
         }
@@ -283,7 +284,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         dismiss(animated: true, completion: nil)
         if urls.count == 1 {
-            SendViewController.transfer = Transfer(url: urls.first!, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
+            SendViewController.transfer = Transfer(url: urls.first!, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
             initializeSocketIO()
         }
     }
@@ -463,7 +464,11 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
                 CCHmacUpdate(&SendViewController.transfer.hmacContext!, $0, encryptedData.count)
             }
             // GET TRANSFER PROGRESS
-            let progress = (SendViewController.transfer.inputStream!.property(forKey: .fileCurrentOffsetKey) as! NSNumber).floatValue / Float(SendViewController.transfer.fileSize!)
+            SendViewController.transfer.bytesSent += UInt64(inputData.count)
+            if SendViewController.transfer.bytesSent > SendViewController.transfer.fileSize! {
+                SendViewController.transfer.bytesSent = SendViewController.transfer.fileSize!
+            }
+            let progress = Float(SendViewController.transfer.bytesSent) / Float(SendViewController.transfer.fileSize!)
             // UPDATE PROGRESS BAR
             self.progressBar.setProgress(progress, animated: true)
             // SEND encryptedData TO RECEIVER
