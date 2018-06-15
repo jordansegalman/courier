@@ -247,9 +247,9 @@ class ReceiveViewController: UIViewController {
                     let progress = Float(dictionary["progress"]!)!
                     self.receivedUpdate(encryptedData: encryptedData, progress: progress)
                     self.receive()
-                } else if dictionary["hmac"] != nil {
-                    let hmac = Data(base64Encoded: dictionary["hmac"]!)!
-                    self.receivedFinal(hmac: hmac)
+                } else if dictionary["trustedHmac"] != nil {
+                    let trustedHmac = Data(base64Encoded: dictionary["trustedHmac"]!)!
+                    self.receivedFinal(trustedHmac: trustedHmac)
                 }
             } else {
                 self.terminateSocketIO()
@@ -300,11 +300,11 @@ class ReceiveViewController: UIViewController {
         self.progressBar.setProgress(progress, animated: true)
     }
     
-    func receivedFinal(hmac: Data) {
+    func receivedFinal(trustedHmac: Data) {
         // DECRYPT FINAL DATA
         var decryptedData = Data()
-        var newHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-        newHmac.withUnsafeMutableBytes {
+        var untrustedHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+        untrustedHmac.withUnsafeMutableBytes {
             CCHmacFinal(&ReceiveViewController.transfer.hmacContext!, $0)
         }
         let decryptedOutputLength = CCCryptorGetOutputLength(ReceiveViewController.transfer.cryptorRef!, 0, true)
@@ -321,7 +321,7 @@ class ReceiveViewController: UIViewController {
         CCCryptorRelease(ReceiveViewController.transfer.cryptorRef!)
         ReceiveViewController.transfer.outputStream!.close()
         // COMPARE HMACS, PREVENT TIMING ATTACK
-        if !hmacCompare(hmac, newHmac) {
+        if !verifyHmac(trustedHmac: trustedHmac, untrustedHmac: untrustedHmac) {
             terminateSocketIO()
             resetReceive()
             UIApplication.shared.isIdleTimerDisabled = false
@@ -337,31 +337,12 @@ class ReceiveViewController: UIViewController {
         self.presentActivityViewController()
     }
     
-    func hmacCompare(_ first: Data, _ second: Data) -> Bool {
-        var compareKey = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-        let compareKeyStatus = compareKey.withUnsafeMutableBytes { compareKeyBytes in
-            SecRandomCopyBytes(kSecRandomDefault, Int(CC_SHA256_DIGEST_LENGTH), compareKeyBytes)
+    func verifyHmac(trustedHmac: Data, untrustedHmac: Data) -> Bool {
+        var result: UInt8 = trustedHmac.count == untrustedHmac.count ? 0 : 1
+        for (i, untrustedByte) in untrustedHmac.enumerated() {
+            result |= trustedHmac[i % trustedHmac.count] ^ untrustedByte
         }
-        if compareKeyStatus != errSecSuccess {
-            fatalError()
-        }
-        var firstHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-        firstHmac.withUnsafeMutableBytes { firstHmacBytes in
-            first.withUnsafeBytes { firstBytes in
-                compareKey.withUnsafeBytes { compareKeyBytes in
-                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), compareKeyBytes, compareKey.count, firstBytes, first.count, firstHmacBytes)
-                }
-            }
-        }
-        var secondHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-        secondHmac.withUnsafeMutableBytes { secondHmacBytes in
-            second.withUnsafeBytes { secondBytes in
-                compareKey.withUnsafeBytes { compareKeyBytes in
-                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256), compareKeyBytes, compareKey.count, secondBytes, second.count, secondHmacBytes)
-                }
-            }
-        }
-        return firstHmac == secondHmac
+        return result == 0
     }
     
     func showCouldNotAuthenticateDataAlert() {

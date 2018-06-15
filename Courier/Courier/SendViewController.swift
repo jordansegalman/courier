@@ -480,12 +480,12 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
                 fatalError()
             }
             encryptedData.count = encryptedOutputMoved
-            var hmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
-            hmac.withUnsafeMutableBytes {
+            var trustedHmac = Data(count: Int(CC_SHA256_DIGEST_LENGTH))
+            trustedHmac.withUnsafeMutableBytes {
                 CCHmacFinal(&SendViewController.transfer.hmacContext!, $0)
             }
             // SEND hmac TO RECEIVER
-            ack.with(["hmac": hmac.base64EncodedString()])
+            ack.with(["trustedHmac": trustedHmac.base64EncodedString()])
         }
     }
     
