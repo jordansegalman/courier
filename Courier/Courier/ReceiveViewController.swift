@@ -253,9 +253,23 @@ class ReceiveViewController: UIViewController {
             }
         }
         // OPEN STREAMS
-        cleanTemporaryDirectory()
-        ReceiveViewController.transfer.url = FileManager.default.temporaryDirectory.appendingPathComponent(decryptedName)
-        ReceiveViewController.transfer.outputStream = OutputStream(url: ReceiveViewController.transfer.url!, append: true)
+        let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let transfersDirectory = documentDirectory.appendingPathComponent("transfers")
+        if !FileManager.default.fileExists(atPath: transfersDirectory.path) {
+            do {
+                try FileManager.default.createDirectory(at: transfersDirectory, withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                fatalError()
+            }
+        }
+        ReceiveViewController.transfer.url = transfersDirectory.appendingPathComponent(decryptedName)
+        if FileManager.default.fileExists(atPath: ReceiveViewController.transfer.url!.path) {
+            let pathExtension = ReceiveViewController.transfer.url!.pathExtension
+            let newPath = ReceiveViewController.transfer.url!.deletingPathExtension().path + "_new"
+            let newURL = URL(fileURLWithPath: newPath).appendingPathExtension(pathExtension)
+            ReceiveViewController.transfer.url = newURL
+        }
+        ReceiveViewController.transfer.outputStream = OutputStream(url: ReceiveViewController.transfer.url!, append: false)
         ReceiveViewController.transfer.outputStream!.open()
         progressBar.isHidden = false
         receive()
@@ -375,6 +389,8 @@ class ReceiveViewController: UIViewController {
     }
     
     func presentActivityViewController() {
+        saveLastTransferURL()
+        cleanTransfersDirectory()
         // PRESENT ACTIVITY VIEW CONTROLLER
         let activityViewController = UIActivityViewController(activityItems: [ReceiveViewController.transfer.url!], applicationActivities: nil)
         terminateSocketIO()
@@ -388,12 +404,20 @@ class ReceiveViewController: UIViewController {
         present(activityViewController, animated: true, completion: nil)
     }
     
-    func cleanTemporaryDirectory() {
+    func saveLastTransferURL() {
+        UserDefaults.standard.set(ReceiveViewController.transfer.url!, forKey: "lastTransferURL")
+    }
+    
+    func cleanTransfersDirectory() {
+        let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let transfersDirectory = documentDirectory.appendingPathComponent("transfers")
         do {
-            let temporaryDirectoryContents = try FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)
-            try temporaryDirectoryContents.forEach { file in
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent(file)
-                try FileManager.default.removeItem(at: url)
+            let transfersDirectoryContents = try FileManager.default.contentsOfDirectory(atPath: transfersDirectory.path)
+            try transfersDirectoryContents.forEach { file in
+                let url = transfersDirectory.appendingPathComponent(file)
+                if (url != ReceiveViewController.transfer.url!) {
+                    try FileManager.default.removeItem(at: url)
+                }
             }
         } catch {
             fatalError()
