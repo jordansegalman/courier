@@ -169,7 +169,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         self.present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
-    func checkPermissions(sourceType: UIImagePickerControllerSourceType) {
+    func checkPermissions(sourceType: UIImagePickerController.SourceType) {
         if sourceType == .camera {
             switch AVCaptureDevice.authorizationStatus(for: .video) {
             case .authorized:
@@ -217,7 +217,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         }
     }
     
-    func showPermissionsAlert(sourceType: UIImagePickerControllerSourceType) {
+    func showPermissionsAlert(sourceType: UIImagePickerController.SourceType) {
         var alertTitle: String = ""
         if sourceType == .camera {
             alertTitle = "Courier does not have permission to access the camera. Please allow access to the camera in Settings."
@@ -226,7 +226,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         }
         let permissionsAlertController = UIAlertController(title: alertTitle, message: nil, preferredStyle: .alert)
         permissionsAlertController.addAction(UIAlertAction(title: "Settings", style: .default, handler: { (permissionsAlertController) in
-            UIApplication.shared.open(URL(string: UIApplicationOpenSettingsURLString)!, options: [:], completionHandler: nil)
+            UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!, options: convertToUIApplicationOpenExternalURLOptionsKeyDictionary([:]), completionHandler: nil)
         }))
         permissionsAlertController.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
         terminateSocketIO()
@@ -242,7 +242,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         }))
         self.present(microphonePermissionsAlertController, animated: true, completion: nil)
     }
-
+    
     func openCamera() {
         let imagePickerController = UIImagePickerController()
         imagePickerController.sourceType = .camera
@@ -270,22 +270,25 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     }
     
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo
-        info: [String : Any]) {
+        info: [UIImagePickerController.InfoKey : Any]) {
+        // Local variable inserted by Swift 4.2 migrator.
+        let info = convertFromUIImagePickerControllerInfoKeyDictionary(info)
+        
         dismiss(animated: true, completion: nil)
-        if info[UIImagePickerControllerMediaType] as! CFString == kUTTypeImage {
+        if info[convertFromUIImagePickerControllerInfoKey(UIImagePickerController.InfoKey.mediaType)] as! CFString == kUTTypeImage {
             if picker.sourceType == .camera {
                 let name = UUID().uuidString + ".png"
                 let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-                if let originalImage = info[UIImagePickerControllerOriginalImage] as? UIImage {
+                if let originalImage = info[convertFromUIImagePickerControllerInfoKey(UIImagePickerController.InfoKey.originalImage)] as? UIImage {
                     do {
-                        try UIImagePNGRepresentation(originalImage)!.write(to: url, options: .atomic)
-
+                        try originalImage.pngData()!.write(to: url, options: .atomic)
+                        
                     } catch {
                         fatalError()
                     }
-                } else if let editedImage = info[UIImagePickerControllerEditedImage] as? UIImage {
+                } else if let editedImage = info[convertFromUIImagePickerControllerInfoKey(UIImagePickerController.InfoKey.editedImage)] as? UIImage {
                     do {
-                        try UIImagePNGRepresentation(editedImage)!.write(to: url, options: .atomic)
+                        try editedImage.pngData()!.write(to: url, options: .atomic)
                     } catch {
                         fatalError()
                     }
@@ -293,14 +296,14 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
                 SendViewController.transfer = Transfer(url: url, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
                 requestStartSend()
             } else {
-                if let imageURL = info[UIImagePickerControllerImageURL] as? URL {
+                if let imageURL = info[convertFromUIImagePickerControllerInfoKey(UIImagePickerController.InfoKey.imageURL)] as? URL {
                     SendViewController.transfer = Transfer(url: imageURL, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
                     requestStartSend()
                 }
             }
         }
-        if info[UIImagePickerControllerMediaType] as! CFString == kUTTypeMovie {
-            if let mediaURL = info[UIImagePickerControllerMediaURL] as? URL {
+        if info[convertFromUIImagePickerControllerInfoKey(UIImagePickerController.InfoKey.mediaType)] as! CFString == kUTTypeMovie {
+            if let mediaURL = info[convertFromUIImagePickerControllerInfoKey(UIImagePickerController.InfoKey.mediaURL)] as? URL {
                 SendViewController.transfer = Transfer(url: mediaURL, bytesSent: 0, fileSize: nil, inputStream: nil, hmacContext: nil, cryptorRef: nil)
                 requestStartSend()
             }
@@ -538,4 +541,19 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         SendViewController.sending = false
         SendViewController.transfer = nil
     }
+}
+
+// Helper function inserted by Swift 4.2 migrator.
+fileprivate func convertFromUIImagePickerControllerInfoKeyDictionary(_ input: [UIImagePickerController.InfoKey: Any]) -> [String: Any] {
+    return Dictionary(uniqueKeysWithValues: input.map {key, value in (key.rawValue, value)})
+}
+
+// Helper function inserted by Swift 4.2 migrator.
+fileprivate func convertToUIApplicationOpenExternalURLOptionsKeyDictionary(_ input: [String: Any]) -> [UIApplication.OpenExternalURLOptionsKey: Any] {
+    return Dictionary(uniqueKeysWithValues: input.map { key, value in (UIApplication.OpenExternalURLOptionsKey(rawValue: key), value)})
+}
+
+// Helper function inserted by Swift 4.2 migrator.
+fileprivate func convertFromUIImagePickerControllerInfoKey(_ input: UIImagePickerController.InfoKey) -> String {
+    return input.rawValue
 }

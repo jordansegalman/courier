@@ -98,10 +98,10 @@
 		1764A1F620C9EBF300BC1FC3 /* Courier */ = {
 			isa = PBXGroup;
 			children = (
-				17C419CD21C8A9CD00F35E3A /* PreviousViewController.swift */,
 				1764A1F720C9EBF300BC1FC3 /* AppDelegate.swift */,
 				1764A1F920C9EBF300BC1FC3 /* SendViewController.swift */,
 				1764A1FB20C9EBF300BC1FC3 /* ReceiveViewController.swift */,
+				17C419CD21C8A9CD00F35E3A /* PreviousViewController.swift */,
 				1764A1FD20C9EBF300BC1FC3 /* Main.storyboard */,
 				17443BB421C8AC9000064E80 /* Assets.xcassets */,
 				1764A20220C9EBF400BC1FC3 /* LaunchScreen.storyboard */,
@@ -171,9 +171,11 @@
 				TargetAttributes = {
 					1764A1F320C9EBF300BC1FC3 = {
 						CreatedOnToolsVersion = 9.4;
+						LastSwiftMigration = 1010;
 					};
 					1764A20920C9EBF400BC1FC3 = {
 						CreatedOnToolsVersion = 9.4;
+						LastSwiftMigration = 1010;
 						TestTargetID = 1764A1F320C9EBF300BC1FC3;
 					};
 				};
@@ -419,7 +421,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.jordansegalman.Courier;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Courier/Bridging-Header.h";
-				SWIFT_VERSION = 4.0;
+				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -442,7 +444,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.jordansegalman.Courier;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Courier/Bridging-Header.h";
-				SWIFT_VERSION = 4.0;
+				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -453,6 +455,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = XB4KC85FEN;
 				INFOPLIST_FILE = CourierTests/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -461,7 +464,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.CourierTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 4.0;
+				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Courier.app/Courier";
 			};
@@ -473,6 +476,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = XB4KC85FEN;
 				INFOPLIST_FILE = CourierTests/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -481,7 +485,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.CourierTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 4.0;
+				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Courier.app/Courier";
 			};
