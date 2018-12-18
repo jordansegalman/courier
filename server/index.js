@@ -12,52 +12,63 @@ var httpServer = http.createServer(app);
 
 // Setup Socket.IO
 var io = require('socket.io')(httpServer);
-var keySockets = {};
+var keySockets = {};	// Stores sender sockets with transaction keys
+
+// Called when a Socket.IO client connects
 io.on('connection', (socket) => {
-	console.log('Socket.IO connection');
+	// Called when Socket.IO client disconnects
 	socket.on('disconnect', () => {
-		console.log('Socket.IO disconnection');
 	});
+	// Called when sender requests to start sending
 	socket.on('requestStartSend', (data, fn) => {
+		// Generate nine digit key for transaction
 		var key = Math.random().toString().slice(2, 11);
 		while (keySockets.hasOwnProperty(key)) {
 			key = Math.random().toString().slice(2, 11);
 		}
-		console.log('from requestStartSend');
+		// Add sender socket to keySockets with generated key
 		keySockets[key] = socket;
+		// Reply to sender with key
 		fn(key);
 	});
+	// Called when receiver requests to start receiving
 	socket.on('requestStartReceive', (data, fn) => {
 		var key = data.key;
+		// Check if given key is in keySockets
 		if (keySockets.hasOwnProperty(key)) {
-		console.log('from requestStartReceive');
+			// Request sender with given key to start sending data
 			keySockets[key].emit('requestStartSend', {}, (data) => {
-		console.log('reply requestStartSend');
+				// Reply to receiver with data
 				fn(data);
 			});
 		} else {
+			// Reply to receiver with nothing
 			fn();
 		}
 	});
-	var i = 0;
+	// Called when receiver requests additional data
 	socket.on('requestReceive', (data, fn) => {
 		var key = data.key;
+		// Check if given key is in keySockets
 		if (keySockets.hasOwnProperty(key)) {
-		console.log('from requestReceive');
+			// Request sender with given key to send additional data
 			keySockets[key].emit('requestSend', {}, (data) => {
-		console.log('reply requestSend');
-				console.log(i++);
+				// Reply to receiver with data
 				fn(data);
 			});
 		} else {
+			// Reply to receiver with nothing
 			fn();
 		}
 	});
+	// Called when receiver successfully received all data
 	socket.on('received', (data) => {
 		var key = data.key;
+		// Check if given key is in keySockets
 		if (keySockets.hasOwnProperty(key)) {
-		console.log('from received');
+			// Notify sender that receiver successfully received all data
 			keySockets[key].emit('received', {});
+			// Delete sender socket from keySockets with given key
 			delete keySockets[key];
 		}
 	});
