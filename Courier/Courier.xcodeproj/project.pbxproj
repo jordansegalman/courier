@@ -418,7 +418,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.jordansegalman.Courier;
+				PRODUCT_BUNDLE_IDENTIFIER = com.courierapp.Courier;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Courier/Bridging-Header.h";
 				SWIFT_VERSION = 4.2;
@@ -441,7 +441,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.jordansegalman.Courier;
+				PRODUCT_BUNDLE_IDENTIFIER = com.courierapp.Courier;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Courier/Bridging-Header.h";
 				SWIFT_VERSION = 4.2;
