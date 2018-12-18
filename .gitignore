@@ -1,4 +1,5 @@
-# Created by https://www.gitignore.io/api/vim,node,xcode,swift
+# Created by https://www.gitignore.io/api/vim,node
+# Edit at https://www.gitignore.io/?templates=vim,node
 
 ### Node ###
 # Logs
@@ -23,7 +24,7 @@ coverage
 # nyc test coverage
 .nyc_output
 
-# Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
+# Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
 
 # Bower dependency directory (https://bower.io/)
@@ -32,14 +33,14 @@ bower_components
 # node-waf configuration
 .lock-wscript
 
-# Compiled binary addons (http://nodejs.org/api/addons.html)
+# Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
 
 # Dependency directories
 node_modules/
 jspm_packages/
 
-# Typescript v1 declaration files
+# TypeScript v1 declaration files
 typings/
 
 # Optional npm cache directory
@@ -60,93 +61,44 @@ typings/
 # dotenv environment variables file
 .env
 
-### Swift ###
-# Xcode
-#
-# gitignore contributors: remember to update Global/Xcode.gitignore, Objective-C.gitignore & Swift.gitignore
+# parcel-bundler cache (https://parceljs.org/)
+.cache
 
-## Build generated
-build/
-DerivedData/
+# next.js build output
+.next
 
-## Various settings
-*.pbxuser
-!default.pbxuser
-*.mode1v3
-!default.mode1v3
-*.mode2v3
-!default.mode2v3
-*.perspectivev3
-!default.perspectivev3
-xcuserdata/
+# nuxt.js build output
+.nuxt
 
-## Other
-*.moved-aside
-*.xccheckout
-*.xcscmblueprint
+# vuepress build output
+.vuepress/dist
 
-## Obj-C/Swift specific
-*.hmap
-*.ipa
-*.dSYM.zip
-*.dSYM
+# Serverless directories
+.serverless/
 
-## Playgrounds
-timeline.xctimeline
-playground.xcworkspace
+# FuseBox cache
+.fusebox/
 
-# Swift Package Manager
-#
-# Add this line if you want to avoid checking in source code from Swift Package Manager dependencies.
-# Packages/
-# Package.pins
-.build/
-
-# CocoaPods - Refactored to standalone file
-
-# Carthage - Refactored to standalone file
-
-# fastlane
-#
-# It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the
-# screenshots whenever they are needed.
-# For more information about the recommended setup visit:
-# https://docs.fastlane.tools/best-practices/source-control/#source-control
-
-fastlane/report.xml
-fastlane/Preview.html
-fastlane/screenshots
-fastlane/test_output
+#DynamoDB Local files
+.dynamodb/
 
 ### Vim ###
-# swap
-.sw[a-p]
-.*.sw[a-p]
-# session
+# Swap
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# Session
 Session.vim
-# temporary
+
+# Temporary
 .netrwhist
 *~
-# auto-generated tag files
+# Auto-generated tag files
 tags
+# Persistent undo
+[._]*.un~
 
-### Xcode ###
-# Xcode
-#
-# gitignore contributors: remember to update Global/Xcode.gitignore, Objective-C.gitignore & Swift.gitignore
-
-## Build generated
-
-## Various settings
-
-## Other
-
-### Xcode Patch ###
-*.xcodeproj/*
-!*.xcodeproj/project.pbxproj
-!*.xcodeproj/xcshareddata/
-!*.xcworkspace/contents.xcworkspacedata
-/*.gcno
-
-
-# End of https://www.gitignore.io/api/vim,node,xcode,swift
+# End of https://www.gitignore.io/api/vim,node
