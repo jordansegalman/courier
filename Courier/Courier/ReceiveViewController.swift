@@ -106,7 +106,7 @@ class ReceiveViewController: UIViewController {
                     self.activityIndicator.stopAnimating()
                     self.receiveButton.isHidden = false
                     self.keyTextField.isHidden = false
-                    self.showIncorrectKeyAlert()
+                    self.showInvalidKeyAlert()
                 }
             }
         } else {
@@ -151,10 +151,10 @@ class ReceiveViewController: UIViewController {
         present(socketIOConnectionAlertController, animated: true, completion: nil)
     }
     
-    func showIncorrectKeyAlert() {
-        let incorrectKeyAlertController = UIAlertController(title: "Incorrect Key", message: nil, preferredStyle: .alert)
-        incorrectKeyAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-        present(incorrectKeyAlertController, animated: true, completion: nil)
+    func showInvalidKeyAlert() {
+        let invalidKeyAlertController = UIAlertController(title: "Invalid Key", message: nil, preferredStyle: .alert)
+        invalidKeyAlertController.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(invalidKeyAlertController, animated: true, completion: nil)
     }
     
     func showPasswordEntryAlert(saltData: Data, ivData: Data, encryptedName: Data) {
@@ -297,7 +297,7 @@ class ReceiveViewController: UIViewController {
                 self.activityIndicator.stopAnimating()
                 self.receiveButton.isHidden = false
                 self.keyTextField.isHidden = false
-                self.showIncorrectKeyAlert()
+                self.showInvalidKeyAlert()
             }
         }
     }
