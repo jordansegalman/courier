@@ -162,7 +162,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             }))
         }
         if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
-            alertController.addAction(UIAlertAction(title: "Photos", style: .default, handler: { (UIAlertAction) in
+            alertController.addAction(UIAlertAction(title: "Photo Library", style: .default, handler: { (UIAlertAction) in
                 // Check photo library permission
                 self.checkPermissions(sourceType: .photoLibrary)
             }))
@@ -287,7 +287,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         if sourceType == .camera {
             alertTitle = "Courier does not have permission to access the camera. Please allow access to the camera in Settings."
         } else if sourceType == .photoLibrary {
-            alertTitle = "Courier does not have permission to access your photos. Please allow access to your photos in Settings."
+            alertTitle = "Courier does not have permission to access your photo library. Please allow access to your photo library in Settings."
         }
         let permissionsAlertController = UIAlertController(title: alertTitle, message: nil, preferredStyle: .alert)
         // Add action for opening Settings
