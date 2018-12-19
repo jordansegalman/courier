@@ -1,16 +1,7 @@
-//
-//  CourierTests.swift
-//  CourierTests
-//
-//  Created by Jordan Segalman on 6/7/18.
-//  Copyright © 2018 example. All rights reserved.
-//
-
 import XCTest
 @testable import Courier
 
 class CourierTests: XCTestCase {
-    
     override func setUp() {
         super.setUp()
         // Put setup code here. This method is called before the invocation of each test method in the class.
@@ -32,5 +23,4 @@ class CourierTests: XCTestCase {
             // Put the code you want to measure the time of here.
         }
     }
-    
 }
