@@ -1,6 +1,6 @@
 import UIKit
 
-class PreviousViewController: UIViewController {
+class HistoryViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
     }

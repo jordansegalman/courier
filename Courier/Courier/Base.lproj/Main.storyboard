@@ -66,10 +66,10 @@
             </objects>
             <point key="canvasLocation" x="749.60000000000002" y="-320.68965517241384"/>
         </scene>
-        <!--Previous-->
+        <!--History-->
         <scene sceneID="IzL-C4-ZlZ">
             <objects>
-                <viewController id="5YZ-nl-W9F" userLabel="Previous" customClass="PreviousViewController" customModule="Courier" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController id="5YZ-nl-W9F" userLabel="History" customClass="HistoryViewController" customModule="Courier" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="8tT-Dk-DHX">
                         <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -90,7 +90,7 @@
                         </constraints>
                         <viewLayoutGuide key="safeArea" id="eBx-1M-2nA"/>
                     </view>
-                    <tabBarItem key="tabBarItem" title="Previous" image="Circle" id="OBG-XN-xPY"/>
+                    <tabBarItem key="tabBarItem" title="History" image="Circle" id="OBG-XN-xPY"/>
                     <simulatedTabBarMetrics key="simulatedBottomBarMetrics"/>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="J0q-Q5-RZZ" userLabel="First Responder" sceneMemberID="firstResponder"/>
@@ -168,7 +168,7 @@
                     <connections>
                         <segue destination="9pv-A4-QxB" kind="relationship" relationship="viewControllers" id="u7Y-xg-7CH"/>
                         <segue destination="8rJ-Kc-sve" kind="relationship" relationship="viewControllers" id="lzU-1b-eKA"/>
-                        <segue destination="5YZ-nl-W9F" kind="relationship" relationship="viewControllers" id="RqY-cB-21C"/>
+                        <segue destination="5YZ-nl-W9F" kind="relationship" relationship="viewControllers" id="2Rt-r4-Pxq"/>
                     </connections>
                 </tabBarController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="HuB-VB-40B" sceneMemberID="firstResponder"/>

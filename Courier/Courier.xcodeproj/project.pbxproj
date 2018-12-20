@@ -16,7 +16,7 @@
 		1764A1FF20C9EBF300BC1FC3 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 1764A1FD20C9EBF300BC1FC3 /* Main.storyboard */; };
 		1764A20420C9EBF400BC1FC3 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 1764A20220C9EBF400BC1FC3 /* LaunchScreen.storyboard */; };
 		1764A20F20C9EBF400BC1FC3 /* CourierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1764A20E20C9EBF400BC1FC3 /* CourierTests.swift */; };
-		17C419CE21C8A9CD00F35E3A /* PreviousViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C419CD21C8A9CD00F35E3A /* PreviousViewController.swift */; };
+		17C419CE21C8A9CD00F35E3A /* HistoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C419CD21C8A9CD00F35E3A /* HistoryViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,7 +44,7 @@
 		1764A20A20C9EBF400BC1FC3 /* CourierTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CourierTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1764A20E20C9EBF400BC1FC3 /* CourierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CourierTests.swift; sourceTree = "<group>"; };
 		1764A21020C9EBF400BC1FC3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		17C419CD21C8A9CD00F35E3A /* PreviousViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PreviousViewController.swift; sourceTree = "<group>"; };
+		17C419CD21C8A9CD00F35E3A /* HistoryViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HistoryViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -101,7 +101,7 @@
 				1764A1F720C9EBF300BC1FC3 /* AppDelegate.swift */,
 				1764A1F920C9EBF300BC1FC3 /* SendViewController.swift */,
 				1764A1FB20C9EBF300BC1FC3 /* ReceiveViewController.swift */,
-				17C419CD21C8A9CD00F35E3A /* PreviousViewController.swift */,
+				17C419CD21C8A9CD00F35E3A /* HistoryViewController.swift */,
 				1764A1FD20C9EBF300BC1FC3 /* Main.storyboard */,
 				17443BB421C8AC9000064E80 /* Assets.xcassets */,
 				1764A20220C9EBF400BC1FC3 /* LaunchScreen.storyboard */,
@@ -247,7 +247,7 @@
 				1764A1FC20C9EBF300BC1FC3 /* ReceiveViewController.swift in Sources */,
 				1764A1F820C9EBF300BC1FC3 /* AppDelegate.swift in Sources */,
 				1764A1FA20C9EBF300BC1FC3 /* SendViewController.swift in Sources */,
-				17C419CE21C8A9CD00F35E3A /* PreviousViewController.swift in Sources */,
+				17C419CE21C8A9CD00F35E3A /* HistoryViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
