@@ -50,3 +50,11 @@ carthage bootstrap --platform iOS
 ### Running
 
 1. Launch the app on your device
+
+## Screenshots
+
+![Tabs](screenshots/tabs.png)
+
+![Sending](screenshots/sending.png)
+
+![Receiving](screenshots/receiving.png)
