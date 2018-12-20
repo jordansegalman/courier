@@ -10,6 +10,7 @@
 		170AB65020CF09260018E477 /* SocketIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 170AB64E20CF09260018E477 /* SocketIO.framework */; settings = {ATTRIBUTES = (Required, ); }; };
 		170AB65120CF09260018E477 /* Starscream.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 170AB64F20CF09260018E477 /* Starscream.framework */; };
 		17443BB521C8AC9100064E80 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 17443BB421C8AC9000064E80 /* Assets.xcassets */; };
+		1751D54E21CB3CBA0044DCC7 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1751D54D21CB3CBA0044DCC7 /* Constants.swift */; };
 		1764A1F820C9EBF300BC1FC3 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1764A1F720C9EBF300BC1FC3 /* AppDelegate.swift */; };
 		1764A1FA20C9EBF300BC1FC3 /* SendViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1764A1F920C9EBF300BC1FC3 /* SendViewController.swift */; };
 		1764A1FC20C9EBF300BC1FC3 /* ReceiveViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1764A1FB20C9EBF300BC1FC3 /* ReceiveViewController.swift */; };
@@ -34,6 +35,7 @@
 		170AB64F20CF09260018E477 /* Starscream.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Starscream.framework; path = Carthage/Build/iOS/Starscream.framework; sourceTree = "<group>"; };
 		172FD56D20CE06480032E818 /* Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Bridging-Header.h"; sourceTree = "<group>"; };
 		17443BB421C8AC9000064E80 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1751D54D21CB3CBA0044DCC7 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		1764A1F420C9EBF300BC1FC3 /* Courier.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Courier.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1764A1F720C9EBF300BC1FC3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		1764A1F920C9EBF300BC1FC3 /* SendViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendViewController.swift; sourceTree = "<group>"; };
@@ -102,11 +104,12 @@
 				1764A1F920C9EBF300BC1FC3 /* SendViewController.swift */,
 				1764A1FB20C9EBF300BC1FC3 /* ReceiveViewController.swift */,
 				17C419CD21C8A9CD00F35E3A /* HistoryViewController.swift */,
+				1751D54D21CB3CBA0044DCC7 /* Constants.swift */,
 				1764A1FD20C9EBF300BC1FC3 /* Main.storyboard */,
-				17443BB421C8AC9000064E80 /* Assets.xcassets */,
 				1764A20220C9EBF400BC1FC3 /* LaunchScreen.storyboard */,
-				1764A20520C9EBF400BC1FC3 /* Info.plist */,
 				172FD56D20CE06480032E818 /* Bridging-Header.h */,
+				17443BB421C8AC9000064E80 /* Assets.xcassets */,
+				1764A20520C9EBF400BC1FC3 /* Info.plist */,
 			);
 			path = Courier;
 			sourceTree = "<group>";
@@ -244,6 +247,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1751D54E21CB3CBA0044DCC7 /* Constants.swift in Sources */,
 				1764A1FC20C9EBF300BC1FC3 /* ReceiveViewController.swift in Sources */,
 				1764A1F820C9EBF300BC1FC3 /* AppDelegate.swift in Sources */,
 				1764A1FA20C9EBF300BC1FC3 /* SendViewController.swift in Sources */,

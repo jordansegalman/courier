@@ -32,7 +32,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     
     // Initializes Socket.IO socket manager and socket with server address
     func initializeSocketIO() {
-        sendSocketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
+        sendSocketManager = SocketManager(socketURL: Constants.serverAddress)
         sendSocket = sendSocketManager.defaultSocket
     }
     
@@ -507,11 +507,11 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         if saltStatus != errSecSuccess {
             fatalError()
         }
-        // Create 512-bit key using PBKDF2 with HMAC-SHA512 as PRF, 100000 iterations, 512-bit salt, and password
+        // Create 512-bit key using PBKDF2 with HMAC-SHA512 as PRF, Constants.PBKDF2Iterations iterations, 512-bit salt, and password
         var keyData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
         let derivationStatus = keyData.withUnsafeMutableBytes { keyBytes in
             saltData.withUnsafeBytes { saltBytes in
-                CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), password, passwordData.count, saltBytes, Int(CC_SHA512_DIGEST_LENGTH), CCPBKDFAlgorithm(kCCPRFHmacAlgSHA512), 100000, keyBytes, Int(CC_SHA512_DIGEST_LENGTH))
+                CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), password, passwordData.count, saltBytes, Int(CC_SHA512_DIGEST_LENGTH), CCPBKDFAlgorithm(kCCPRFHmacAlgSHA512), Constants.PBKDF2Iterations, keyBytes, Int(CC_SHA512_DIGEST_LENGTH))
             }
         }
         if derivationStatus != kCCSuccess {
@@ -586,12 +586,12 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
     
     // Encrypts and authenticates additional data from file input stream, then replies to receiver with encrypted data and transfer progress or HMAC hash
     func send(ack: SocketAckEmitter) {
-        var inputData = Data(count: 1048576)
+        var inputData = Data(count: Constants.inputStreamReadBytes)
         let inputLength = inputData.count
         var encryptedData = Data()
         // Check if file input stream has bytes available
         if SendViewController.transfer.inputStream!.hasBytesAvailable {
-            // Read one mebibyte of input stream data
+            // Read Constants.inputStreamReadBytes bytes of input stream data
             let result = inputData.withUnsafeMutableBytes { inputBytes in
                 SendViewController.transfer.inputStream!.read(inputBytes, maxLength: inputLength)
             }

@@ -4,7 +4,8 @@ var http = require('http');
 // Load environment variables
 require('dotenv').config();
 
-const port = process.env.PORT;
+const port = process.env.PORT;	// Server port
+const keyLength = 9;		// Transaction key length
 
 // Setup Express and HTTP server
 var app = express();
@@ -21,10 +22,10 @@ io.on('connection', (socket) => {
 	});
 	// Called when sender requests to start sending
 	socket.on('requestStartSend', (data, fn) => {
-		// Generate random nine digit key for transaction
-		var key = Math.random().toString().slice(2, 11);
+		// Generate random key with keyLength digits for transaction
+		var key = Math.random().toString().slice(2, 2 + keyLength);
 		while (keySockets.hasOwnProperty(key)) {
-			key = Math.random().toString().slice(2, 11);
+			key = Math.random().toString().slice(2, 2 + keyLength);
 		}
 		// Add sender socket to keySockets with generated key
 		keySockets[key] = socket;

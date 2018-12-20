@@ -39,16 +39,16 @@ class ReceiveViewController: UIViewController {
         updateReceiveButtonState()
     }
     
-    // Enables receive button if key text field contains nine characters
+    // Enables receive button if key text field contains Constants.keyLength characters
     private func updateReceiveButtonState() {
         if let key = keyTextField.text {
-            receiveButton.isEnabled = !key.isEmpty && key.count == 9
+            receiveButton.isEnabled = !key.isEmpty && key.count == Constants.keyLength
         }
     }
     
     // Initializes Socket.IO socket manager and socket with server address
     func initializeSocketIO() {
-        receiveSocketManager = SocketManager(socketURL: URL(string: "http://127.0.0.1")!)
+        receiveSocketManager = SocketManager(socketURL: Constants.serverAddress)
         receiveSocket = receiveSocketManager.defaultSocket
     }
     
@@ -150,8 +150,8 @@ class ReceiveViewController: UIViewController {
             showTransferAlert()
             return
         }
-        // Check if key text field contains nine characters
-        if let key = keyTextField.text, !key.isEmpty && key.count == 9 {
+        // Check if key text field contains Constants.keyLength characters
+        if let key = keyTextField.text, !key.isEmpty && key.count == Constants.keyLength {
             // Set receiving
             ReceiveViewController.receiving = true
             keyTextField.resignFirstResponder()
@@ -235,11 +235,11 @@ class ReceiveViewController: UIViewController {
     // Initializes decryption, authentication, and file output stream, then begins receiving of data
     func initializeReceive(password: String, saltData: Data, ivData: Data, encryptedName: Data) {
         let passwordData = password.data(using: .utf8)!
-        // Create 512-bit key using PBKDF2 with HMAC-SHA512 as PRF, 100000 iterations, 512-bit salt, and password
+        // Create 512-bit key using PBKDF2 with HMAC-SHA512 as PRF, Constants.PBKDF2Iterations iterations, 512-bit salt, and password
         var keyData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
         let derivationStatus = keyData.withUnsafeMutableBytes { keyBytes in
             saltData.withUnsafeBytes { saltBytes in
-                CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), password, passwordData.count, saltBytes, Int(CC_SHA512_DIGEST_LENGTH), CCPBKDFAlgorithm(kCCPRFHmacAlgSHA512), 100000, keyBytes, Int(CC_SHA512_DIGEST_LENGTH))
+                CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), password, passwordData.count, saltBytes, Int(CC_SHA512_DIGEST_LENGTH), CCPBKDFAlgorithm(kCCPRFHmacAlgSHA512), Constants.PBKDF2Iterations, keyBytes, Int(CC_SHA512_DIGEST_LENGTH))
             }
         }
         if derivationStatus != kCCSuccess {
