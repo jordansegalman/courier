@@ -499,7 +499,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
             fatalError()
         }
         let passwordData = password.data(using: .utf8)!
-        // Generate 512-bit secure random salt
+        // Generate 512-bit secure pseudorandom salt
         var saltData = Data(count: Int(CC_SHA512_DIGEST_LENGTH))
         let saltStatus = saltData.withUnsafeMutableBytes { saltBytes in
             SecRandomCopyBytes(kSecRandomDefault, Int(CC_SHA512_DIGEST_LENGTH), saltBytes)
@@ -530,7 +530,7 @@ class SendViewController: UIViewController, UIImagePickerControllerDelegate, UIN
         hmacKey.withUnsafeBytes {
             CCHmacInit(&SendViewController.transfer.hmacContext!, CCHmacAlgorithm(kCCHmacAlgSHA256), $0, hmacKey.count)
         }
-        // Generate secure random initialization vector for 128-bit AES block size
+        // Generate secure pseudorandom initialization vector for 128-bit AES block size
         let ivSize = kCCBlockSizeAES128
         var ivData = Data(count: ivSize)
         let ivStatus = ivData.withUnsafeMutableBytes { ivBytes in

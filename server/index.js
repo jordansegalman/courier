@@ -21,7 +21,7 @@ io.on('connection', (socket) => {
 	});
 	// Called when sender requests to start sending
 	socket.on('requestStartSend', (data, fn) => {
-		// Generate nine digit key for transaction
+		// Generate random nine digit key for transaction
 		var key = Math.random().toString().slice(2, 11);
 		while (keySockets.hasOwnProperty(key)) {
 			key = Math.random().toString().slice(2, 11);
